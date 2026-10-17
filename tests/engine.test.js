@@ -70,3 +70,25 @@ test('build loop passes effective Capacitor kind, not the original web type',asy
   await engine.buildLoop(0,3);
   assert.deepEqual(calls,[{slot:0,kind:'capacitor',generation:3,deploy:true}]);
 });
+
+test('parse emulator discovery from multiple ADB ports',()=>{
+  const {parseAdbEmulators,chooseEmulatorPort,parseRunningAvdName}=require('../src/main/engine');
+  const d=parseAdbEmulators('List of devices attached\nemulator-5554\tdevice product:foo\nemulator-5556\toffline\nemulator-5558\tdevice\n');
+  assert.deepEqual(d.map(x=>x.serial),['emulator-5554','emulator-5556','emulator-5558']);
+  assert.equal(parseRunningAvdName('Baodroid_Preview_1\r\nOK\r\n'),'Baodroid_Preview_1');
+  assert.equal(chooseEmulatorPort([5554,5556],5554),5558);
+  assert.equal(chooseEmulatorPort([5554],5558),5558);
+  assert.equal(chooseEmulatorPort([5554],5558,[5558]),5556);
+});
+test('native slot offers a repair-and-build entry point without resetting the SDK',async()=>{
+  const engine=makeEngine();
+  engine.store.data.projects[0].kind='web';
+  engine.store.data.slots[0].nativeMode=true;
+  engine.devices[0].status='running';
+  let called=null;
+  engine.reloadSlot=async slot=>{called=slot};
+  const action=await engine.recoverAndOpen(0);
+  assert.equal(action.state,'building');
+  assert.equal(called,0);
+  assert.equal(engine.store.data.slots[0].nativeMode,true);
+});

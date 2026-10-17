@@ -16,17 +16,39 @@ function chooseFreeAvd(names,slots,index) {
 function parseRunningAvdName(output) {
   return String(output||'').split(/\r?\n/).map(s=>s.trim()).find(s=>s && s!=='OK') || '';
 }
+function parseAdbEmulators(output) {
+  return String(output||'').split(/\r?\n/)
+    .map(line => line.trim().match(/^(emulator-(\d+))\s+(device|offline|unauthorized)\b/))
+    .filter(Boolean).map(m=>({serial:m[1],port:Number(m[2]),state:m[3]}));
+}
+function chooseEmulatorPort(occupied,preferred,used=[]) {
+  const taken=new Set([...occupied,...used].map(x=>Number(x)));
+  if(preferred%2===0&&preferred>=5554&&preferred<=5584&&!taken.has(preferred))return preferred;
+  for(let port=5554;port<=5584;port+=2)if(!taken.has(port))return port;
+  throw new Error('Không còn cổng emulator trống từ 5554 đến 5584.');
+}
 
 class Engine {
   constructor(store, emit) {
     this.store = store; this.emit = emit;
     this.devices = Array.from({length:3}, (_,i) => ({slot:i,status:'off',serial:`emulator-${5554 + i*2}`,preview:null,build:'idle',message:'Chưa khởi chạy',lastSync:null}));
-    this.workers = Array.from({length:3}, () => ({emulator:null,runner:null,metro:null,metroLastStart:0,watcher:null,timer:null,debounce:null,monitorTimer:null,recoveryTimer:null,recoveryAttempts:0,autoLaunching:false,adbFailures:0,previewFailures:0,bootedAt:0,generation:0,busy:false,dirty:false,manuallyDeploy:false,flutterReady:false}));
+    this.workers = Array.from({length:3}, () => ({emulator:null,attached:false,runner:null,metro:null,metroLastStart:0,watcher:null,timer:null,debounce:null,monitorTimer:null,recoveryTimer:null,recoveryAttempts:0,autoLaunching:false,adbFailures:0,previewFailures:0,bootedAt:0,generation:0,busy:false,dirty:false,manuallyDeploy:false,flutterReady:false}));
+    this.logPath=store.file?path.join(path.dirname(store.file),'baodroid-runtime.log'):null;
     this.logs=[]; this.closed=false; this.webPreview=null;
+    if(this.logPath)try{
+      const old=fs.readFileSync(this.logPath,'utf8').split(/\r?\n/).slice(-120);
+      this.logs=old.map(line=>{try{return JSON.parse(line)}catch{return null}}).filter(Boolean);
+    }catch{/* no logs from previous run */}
   }
   log(message, level='info', slot=null) {
     const record = {time:new Date().toLocaleTimeString('vi-VN', {hour12:false}), message:String(message).slice(0,900), level, slot};
     this.logs.push(record); if (this.logs.length>350) this.logs.shift();
+    if(this.logPath)try{
+      fs.mkdirSync(path.dirname(this.logPath),{recursive:true});
+      if(fs.existsSync(this.logPath)&&fs.statSync(this.logPath).size>2*1024*1024)
+        fs.writeFileSync(this.logPath,this.logs.slice(-180).map(r=>JSON.stringify(r)).join('\n')+'\n','utf8');
+      fs.appendFileSync(this.logPath,JSON.stringify(record)+'\n','utf8');
+    }catch{/* never block Android because of logging */}
     this.emit('log', record);
   }
   snapshot() {
@@ -65,7 +87,7 @@ class Engine {
     if (this.store.data.slots.some((s,i) => s.projectId===id && this.devices[i].status !== 'off' && this.devices[i].status !== 'error')) throw new Error('Dừng máy ảo của dự án trước khi xóa.');
     for(let i=0;i<3;i++)if(this.store.data.slots[i].projectId===id && this.webPreview?.isWebSlot(i))this.webPreview.stop(i);
     this.store.data.projects=this.store.data.projects.filter(x => x.id!==id);
-    for (const s of this.store.data.slots) if (s.projectId===id) s.projectId=null;
+    for (const s of this.store.data.slots) if (s.projectId===id) {s.projectId=null;s.avd='';s.nativeMode=false;}
     this.changed(); return true;
   }
   async assignProject(slot, projectId) {
@@ -73,7 +95,11 @@ class Engine {
     if (projectId) this.project(projectId);
     if (projectId && this.store.data.slots.some((s,i) => i!==slot && s.projectId===projectId)) throw new Error('Mỗi dự án chỉ được gán cho một máy ảo.');
     if (this.devices[slot].status!=='off') await this.stopSlot(slot);
-    this.store.data.slots[slot].projectId=projectId || null;
+    const assigned=this.store.data.slots[slot];
+    if(assigned.projectId!==projectId){
+      assigned.nativeMode=false;assigned.avd='';
+    }
+    assigned.projectId=projectId || null;
     this.changed();
     if (projectId) void this.autoStartSlot(slot);
     return true;
@@ -122,7 +148,44 @@ class Engine {
   }
   async resumeAssignedSlots() {
     if(this.closed)return;
-    await Promise.allSettled([0,1,2].map(i=>this.autoStartSlot(i)));
+    // Serialize launches so two slots never race for the same spare emulator port.
+    for(let i=0;i<3;i++){
+      if(this.closed)return;
+      try{await this.autoStartSlot(i);}catch(error){this.log('Tự mở máy '+(i+1)+': '+error.message,'error',i);}
+    }
+  }
+  async recoverAndOpen(slot) {
+    this.requireSlot(slot);
+    const assigned=this.store.data.slots[slot];
+    if(!assigned.projectId)throw new Error('Hãy chọn dự án trước khi sửa kết nối.');
+    const project=this.project(assigned.projectId);
+    if((project.kind==='web'||project.kind==='expo-web')&&!assigned.nativeMode){
+      if(this.devices[slot].status==='running')return {state:'already-running',mode:'web'};
+      this.webPreview?.stop(slot);
+      this.update(slot,{status:'off',build:'idle',message:'Đang khởi động lại Web Preview…'});
+      this.webPreview?.start(slot);
+      return {state:'starting',mode:'web'};
+    }
+    const worker=this.workers[slot];
+    if(this.devices[slot].status==='running'){
+      if(worker.busy){
+        this.log('APK đang được build. Vui lòng chờ bước hiện tại hoàn thành.','info',slot);
+        return {state:'building'};
+      }
+      this.log('Đang build/cài lại APK lên Android đang chạy.','info',slot);
+      await this.reloadSlot(slot);
+      return {state:'building'};
+    }
+    if(this.devices[slot].status==='booting'){
+      this.log('Máy Android đang khởi động. Sẽ tự build và cài APK khi boot xong.','info',slot);
+      return {state:'booting'};
+    }
+    worker.recoveryAttempts=0;
+    this.clearWorker(slot);
+    this.update(slot,{status:'off',build:'idle',message:'Đang tự tìm máy ảo và mở ứng dụng…'});
+    const success=await this.autoStartSlot(slot);
+    if(!success)throw new Error(this.devices[slot].message||'Chưa khởi động được Android.');
+    return {state:'booting'};
   }
   configure(payload) {
     if (!payload || typeof payload !== 'object') throw new Error('Cấu hình không hợp lệ.');
@@ -197,32 +260,53 @@ class Engine {
     if (!avds.includes(assigned.avd)) throw new Error('AVD không tồn tại trong Android SDK: '+assigned.avd);
     const worker=this.workers[slot], serial=this.devices[slot].serial;
     if (this.devices.some((d,i)=>i!==slot && d.status!=='off' && this.store.data.slots[i].avd===assigned.avd)) throw new Error('AVD đang được sử dụng.');
-    const list=await exec(this.tools().adb,['devices'],{timeout:10000});
-    const occupied=list.stdout.split(/\r?\n/).some(line=>line.startsWith(serial+'\t'));
-    let attach=false;
-    if(occupied) {
-      // A recovery script may have booted this exact AVD already.
-      // Check its identity to avoid installing the wrong project's APK.
-      let found='';
+    const list=await exec(this.tools().adb,['devices','-l'],{timeout:10000});
+    const observed=parseAdbEmulators(list.stdout);
+    const usedByOtherSlots=this.devices.filter((_,i)=>i!==slot)
+      .map(d=>d.serial).filter(Boolean);
+    // Look for the matching AVD on ANY port: a Windows repair tool can boot
+    // it before Baodroid and Android Studio does not promise a fixed ADB port.
+    let attachedSerial=null;
+    for(const entry of observed.filter(e=>e.state==='device')) {
+      let name='';
       try {
-        const response=await exec(this.tools().adb,['-s',serial,'emu','avd','name'],{timeout:8000});
-        found=parseRunningAvdName(response.stdout);
-      }catch(e) {
-        throw new Error(`Android đang sử dụng ${serial} nhưng Baodroid chưa xác minh được tên AVD: ${e.message}`);
+        const response=await exec(this.tools().adb,['-s',entry.serial,'emu','avd','name'],{timeout:6500});
+        name=parseRunningAvdName(response.stdout);
+      }catch(error){
+        this.log('Chưa đọc được AVD tại '+entry.serial+': '+error.message,'warn',slot);
+        continue;
       }
-      if(found!==assigned.avd)throw new Error(`Cổng ${serial} đang chạy AVD ${found||'không xác định'}, không phải ${assigned.avd}. Đã ngăn cài nhầm ứng dụng.`);
-      attach=true;
+      if(name===assigned.avd){
+        if(usedByOtherSlots.includes(entry.serial) &&
+           this.devices.some((d,i)=>i!==slot&&d.serial===entry.serial&&d.status!=='off'&&d.status!=='error'))
+          throw new Error('AVD đang được máy preview khác sử dụng: '+entry.serial);
+        attachedSerial=entry.serial;break;
+      }
     }
+    let port=null;
+    if(!attachedSerial) {
+      const activeSlots=this.devices.filter((_,i)=>i!==slot)
+        .filter(d=>d.status==='running'||d.status==='booting')
+        .map(d=>Number(d.serial?.replace('emulator-','')));
+      port=chooseEmulatorPort(observed.map(x=>x.port),5554+slot*2,activeSlots);
+    }
+    const runningSerial=attachedSerial||'emulator-'+port;
+    this.devices[slot].serial=runningSerial;
     const generation=++worker.generation;
-    this.update(slot,{status:'booting',previewMode:'android',webUrl:null,build:'idle',message:attach?'Đã nhận Android đang chạy. Đang chuẩn bị APK…':'Đang khởi động Android Emulator thật…',lastSync:null});
-    this.log(attach?`Đã kết nối lại AVD ${assigned.avd} trên ${serial}. Đang tự build/cài/mở ${project.name}.`:`Khởi động ${assigned.avd} cho ${project.name} (${serial}).`,'info',slot);
+    worker.attached=Boolean(attachedSerial);
+    this.update(slot,{status:'booting',previewMode:'android',webUrl:null,build:'idle',
+      message:attachedSerial?'Đã tìm thấy Android đang chạy. Đang chuẩn bị cài ứng dụng…':'Đang khởi động Android Emulator thật…',
+      lastSync:null});
+    this.log(attachedSerial
+      ?'Tự kết nối AVD '+assigned.avd+' tại '+runningSerial+'; sẽ cài/mở ứng dụng.'
+      :'Khởi động '+assigned.avd+' cho '+project.name+' tại '+runningSerial+'.','info',slot);
     try {
-      if(attach) {
+      if(attachedSerial) {
         worker.emulator=null;
         void this.boot(slot,generation,project).catch(error=>{if(worker.generation===generation)this.fail(slot,error);});
-        return {status:'booting',serial,attached:true};
+        return {status:'booting',serial:runningSerial,attached:true};
       }
-      worker.emulator=launch(this.tools().emulator,['-avd',assigned.avd,'-port',String(5554+slot*2),'-no-window','-no-audio','-no-boot-anim','-netdelay','none','-netspeed','full'],{
+      worker.emulator=launch(this.tools().emulator,['-avd',assigned.avd,'-port',String(port),'-no-window','-no-audio','-no-boot-anim','-netdelay','none','-netspeed','full'],{
         onLine:line => {if (/ERROR|PANIC|failed/i.test(line)) this.log(line,'error',slot);}
       });
       worker.emulator.on('error', err=>{if (worker.generation===generation) this.fail(slot,err);});
@@ -415,17 +499,30 @@ class Engine {
     this.update(slot,{build:'building',message:project.kind==='react-native'?'Đang build React Native Android…':'Gradle incremental build...'});
     const started=Date.now();
     const build=await new Promise((resolve,reject)=>{
+      const recent=[];
+      let lastReported=0;
       const args=[':app:assembleDebug','--build-cache','--max-workers=2','--console=plain'];
       if(project.kind==='react-native')args.push('-PreactNativeDevServerPort='+String(8081+slot));
       const child=launch(gradle.cmd,args,{
         cwd:base,shell:gradle.shell,onLine:line=>{
-          if (/FAILED|ERROR|error:/i.test(line)) this.log(line,'error',slot);
+          recent.push(String(line).slice(0,350));
+          if(recent.length>25)recent.shift();
+          if (/FAILED|ERROR|error:|What went wrong|Execution failed/i.test(line)) this.log(line,'error',slot);
           else if (/BUILD SUCCESSFUL|BUILD FAILED/i.test(line)) this.log(line,'info',slot);
+          else if (/^> Task |Downloading|BUILDING/i.test(line)&&Date.now()-lastReported>4000){
+            lastReported=Date.now();
+            this.update(slot,{build:'building',message:'Đang build APK: '+String(line).slice(0,130)});
+          }
         }
       });
       this.workers[slot].runner=child;
       child.on('error',reject);
-      child.on('close',code=>code===0?resolve():reject(new Error(`Gradle build lỗi (exit ${code}). Xem Log hoặc chạy Gradle trong VS Code.`)));
+      child.on('close',code=>{
+        if(code===0){resolve();return;}
+        const clues=recent.filter(x=>/error|failed|problem|cannot|could not|what went wrong|exception/i.test(x)).slice(-3);
+        const summary=(clues.length?clues:recent.slice(-3)).join(' | ').slice(0,650);
+        reject(new Error('Gradle build thất bại (mã '+code+'). '+summary));
+      });
     });
     if (generation!==this.workers[slot].generation) return;
     const apk=findDebugApk(base);
@@ -461,7 +558,11 @@ class Engine {
     this.log(`Build ${time}s${mustDeploy?' + deploy ADB':''} thành công.`, 'success',slot);
     void build;
   }
-  failBuild(slot,error) { this.update(slot,{build:'error',message:error.message}); this.log(error.message,'error',slot); }
+  failBuild(slot,error) {
+    const message='Build/cài ứng dụng thất bại: '+String(error.message||error);
+    this.update(slot,{build:'error',message});
+    this.log(message,'error',slot);
+  }
   fail(slot,error) {
     this.log(error.message,'error',slot);
     this.clearWorker(slot);
@@ -545,6 +646,7 @@ class Engine {
     if(worker.metro){stopProcess(worker.metro);worker.metro=null;}
     if(worker.emulator){stopProcess(worker.emulator);worker.emulator=null;}
     worker.dirty=false;worker.busy=false;worker.flutterReady=false;worker.adbFailures=0;worker.previewFailures=0;
+    worker.attached=false;
   }
   async stopSlot(slot) {
     this.requireSlot(slot);
@@ -555,13 +657,14 @@ class Engine {
       return true;
     }
     const previous=this.devices[slot].status;
+    const isExternal=this.workers[slot].attached;
     this.clearWorker(slot);
     this.workers[slot].recoveryAttempts=0;
     this.update(slot,{status:'off',previewMode:null,webUrl:null,build:'idle',message:'Đã dừng thủ công',lastSync:null,rotation:0,screenHeight:undefined,screenWidth:undefined});
-    if(previous!=='off') {
+    if(previous!=='off'&&!isExternal) {
       try {await this.adb(slot,['emu','kill'],3500);}catch{/* Emulator already stopped */}
-      this.log('Đã dừng emulator.','info',slot);
-    }
+      this.log('Đã dừng emulator do Baodroid khởi chạy.','info',slot);
+    } else if(isExternal)this.log('Đã ngắt Baodroid khỏi AVD bên ngoài; emulator vẫn chạy.','info',slot);
     return true;
   }
   dispose() {
@@ -569,7 +672,8 @@ class Engine {
     this.closed=true;
     if(this.webPreview)this.webPreview.dispose();
     for(let i=0;i<3;i++) {
-      if(!this.webPreview?.isWebSlot(i) && (this.devices[i].status==='running'||this.devices[i].status==='booting')) {
+      if(!this.webPreview?.isWebSlot(i) && !this.workers[i].attached &&
+         (this.devices[i].status==='running'||this.devices[i].status==='booting')) {
         // Exit asynchronously without blocking Electron shutdown.
         const adb=toolsForSdk(sdkRoot(this.store.data.settings.sdkPath)).adb;
         try {const proc=spawn(adb,['-s',this.devices[i].serial,'emu','kill'],{windowsHide:true,detached:true,stdio:'ignore'});proc.on('error',()=>{});proc.unref();}catch{/* skip */}
@@ -578,4 +682,4 @@ class Engine {
     }
   }
 }
-module.exports={Engine,chooseFreeAvd,parseRunningAvdName};
+module.exports={Engine,chooseFreeAvd,parseRunningAvdName,parseAdbEmulators,chooseEmulatorPort};

@@ -68,6 +68,11 @@ function cardHTML(i){
       (webKind(project.kind)?'<button class="button quiet" data-web-slot="'+i+'">↩ Xem Web</button>':''):
       '<button class="button native-setup" data-native-slot="'+i+'">⚙ Khởi tạo Android SDK & AVD</button>')+
     '</div>':'')+
+  (project&&config.nativeMode?
+    '<div class="recover-actions"><button class="button recover-app" data-recover-slot="'+i+'"'+
+    (device.status==='booting'||device.build==='building'||device.build==='deploying'?' disabled':'')+
+    '>↻ Sửa kết nối & mở app</button>'+
+    '<span class="recover-description">Tự nhận AVD → build → cài → mở APK</span></div>':'')+
   (project&&!isWeb?
     '<div class="native-progress" data-native-progress="'+i+'"'+(!nativeProgressText(device)?' hidden':'')+'>'+
     '<span>'+escapeHTML(nativeProgressText(device))+'</span>'+
@@ -102,6 +107,8 @@ function render(){
      const build=current.querySelector('.device-details .build');
      if(details)details.textContent=device.message||'';
      if(build)build.textContent=buildText(device.build);
+     const recover=current.querySelector('[data-recover-slot]');
+     if(recover)recover.disabled=device.status==='booting'||device.build==='building'||device.build==='deploying';
      const status=current.querySelector('[data-native-progress]');
      if(status){
        const text=nativeProgressText(device);
@@ -131,6 +138,21 @@ function setView(next){
  });
 }
 function wireCards(){
+ document.querySelectorAll('[data-recover-slot]').forEach(el=>{
+   if(el.dataset.bound)return;el.dataset.bound='1';
+   el.addEventListener('click',async()=>{
+     const i=Number(el.dataset.recoverSlot);
+     el.disabled=true;
+     const result=await invoke('recoverSlot',i);
+     if(result){
+       notify(result.state==='building'?'Đang build và cài APK, bạn đợi hoàn tất.':
+         result.state==='booting'?'Đã tiếp nhận lệnh. Baodroid đang kết nối lại Android.':
+         'Đang chuẩn bị preview.');
+       $('log-panel').open=true;
+       renderLogs();
+     }else el.disabled=false;
+   });
+ });
  document.querySelectorAll('[data-retry-build]').forEach(el=>{
    if(el.dataset.bound)return;el.dataset.bound='1';
    el.addEventListener('click',async()=>{
@@ -291,7 +313,8 @@ function bind(){
  });
  api.onLog(item=>{
    logs.push(item);if(logs.length>160)logs.shift();
-   if($('log-panel').open)renderLogs();
+   if(item.level==='error'){$('log-panel').open=true;renderLogs();}
+   else if($('log-panel').open)renderLogs();
  });
  api.onUpdate(showUpdate);
  api.onSDKSetup(e=>{

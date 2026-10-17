@@ -86,6 +86,7 @@ function registerHandlers() {
   register('start-slot', (slot) => engine.startSlot(slot));
   register('stop-slot', (slot) => engine.stopSlot(slot));
   register('reload-slot', (slot) => engine.reloadSlot(slot));
+  register('recover-slot', (slot) => engine.recoverAndOpen(slot));
   register('open-vscode', (projectId) => engine.openVSCode(projectId));
   register('ai-status', async slot => { await ai.checkAuth(); return ai.state(slot); });
   register('ai-connect', (slot,mode) => ai.connect(slot,mode));

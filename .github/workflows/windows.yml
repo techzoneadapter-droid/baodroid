@@ -75,5 +75,5 @@ jobs:
           if (-not ($assets.Name -match '^Baodroid-Setup-.*\.exe$')) { throw "Missing NSIS installer" }
           if (-not ($assets.Name -contains 'latest.yml')) { throw "Missing latest.yml updater metadata" }
           $paths = @($assets | ForEach-Object { $_.FullName })
-          gh release create $tag @paths --target main --title "Baodroid $tag" --notes "Baodroid 0.8.2: Adopt a running matching Android Emulator after one-click repair, then automatically build, install and launch each project APK. Correct regression test."
+          gh release create $tag @paths --target main --title "Baodroid $tag" --notes "Baodroid 0.8.3: One-click self-heal and APK launch; discover matching Android AVD on any ADB port, reserve alternate emulator ports, preserve external emulators, keep diagnostic logs and show Gradle errors."
           if ($LASTEXITCODE -ne 0) { throw "Release upload failed" }

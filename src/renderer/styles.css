@@ -189,3 +189,10 @@ footer{margin-top:auto;color:#6483a1;text-align:center;font-size:11px;padding:5p
 .native-progress span{flex:1;min-width:0;overflow-wrap:anywhere}
 .native-progress .button{min-height:30px;padding:5px 9px;font-size:10px}
 .native-progress:has([data-retry-build]:not([hidden])){border-color:#9b7e4d;background:#393027;color:#f5d9a3}
+
+/* v0.8.3 – self-healing emulator and one-click app installation */
+.recover-actions{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:5px 0 8px}
+.recover-app{background:#167a85;border:1px solid #29a9b8;color:#eaffff;font-size:12px;min-height:39px;flex:1 1 190px}
+.recover-app:hover:not(:disabled){background:#1c8b97}
+.recover-app:disabled{opacity:.58;cursor:progress}
+.recover-description{font-size:10px;color:#80bdd3;flex:1 1 170px;text-align:center;line-height:1.4}

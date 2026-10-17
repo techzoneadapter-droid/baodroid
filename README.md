@@ -55,3 +55,8 @@ Bản vá sửa workflow build/deploy nhưng vẫn cần kiểm thử thực t�
 ## v0.8.2 — Sửa trường hợp Android chỉ hiện màn hình Home
 
 Khi Android Emulator đã được công cụ sửa lỗi hoặc Android Studio mở trước trên cổng tương ứng, Baodroid sẽ dùng `adb emu avd name` xác minh đó **đúng AVD của vị trí preview**, kết nối lại và tiếp tục **Gradle build → ADB install → mở APK**. Không buộc người dùng đóng emulator, cài SDK lại hay gõ lệnh CMD. Không tự nhận một AVD khác đang dùng cùng cổng. Nếu build APK thất bại, xem Nhật ký kỹ thuật để xác định Gradle/JDK hay thư viện dự án. Cập nhật này chưa được xác nhận trên phần cứng Windows cụ thể.
+
+
+## v0.8.3: Sửa kết nối & mở app
+
+Nếu SDK/AVD đã tạo nhưng máy Android chỉ hiện màn hình Home, nhấn nút **Sửa kết nối & mở app** dưới dự án ở chế độ Android native. Baodroid tự tìm AVD đúng theo tên trên mọi cổng ADB, nhận emulator bên ngoài mà không đóng nó, hoặc chọn cổng trống để khởi động AVD, sau đó tự chạy Gradle → cài APK → mở ứng dụng. Nếu Android đang chạy nhưng Gradle lỗi, nút sẽ build lại mà không cài SDK hay reset dữ liệu AVD. Lỗi được hiển thị dưới preview và mở Nhật ký kỹ thuật, đồng thời lưu tại thư mục dữ liệu Baodroid trong file `baodroid-runtime.log`. Nếu một emulator thuộc dự án khác đang dùng cổng mặc định, Baodroid sẽ thử cổng còn trống, không ghi đè AVD khác. Android Emulator và build native trên Windows yêu cầu cấu hình JDK/Gradle phù hợp, nên nút sửa không thể đảm bảo vượt qua lỗi phụ thuộc trong mã dự án.
