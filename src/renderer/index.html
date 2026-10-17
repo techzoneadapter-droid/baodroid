@@ -1,82 +1,65 @@
 <!doctype html>
-<html lang="vi"><head>
-<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"/>
-<title>Baodroid — Android Preview Hub</title>
-<link rel="stylesheet" href="styles.css"/>
-</head><body>
-<div id="app" class="shell">
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>Baodroid — Android Preview</title>
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div id="app">
   <header class="topbar">
-    <div class="identity"><div class="brandmark">▣</div><div class="brand"><strong>BAODROID</strong><span>ANDROID PREVIEW HUB</span></div></div>
-    <div class="header-divider"></div>
-    <div class="connection"><span class="pulse"></span><span>Workspace cục bộ</span><span class="tag">VS Code</span></div>
-    <div class="header-actions">
-      <button class="top-action layout-action" id="btn-toggle-left" title="Thu gọn/mở rộng thanh điều hướng" aria-label="Thu gọn thanh trái" aria-expanded="true">☰ <span>Trái</span></button>
-      <button class="top-action layout-action" id="btn-toggle-right" title="Thu gọn/mở rộng bảng tác vụ" aria-label="Thu gọn bảng phải" aria-expanded="true">◫ <span>Phải</span></button>
-      <button class="top-action" id="btn-refresh">⟳ <span>Làm mới</span></button>
-      <button class="top-action" id="btn-update">↓ <span>Kiểm tra bản vá</span></button>
-      <button class="top-action small" id="btn-settings">⚙</button>
-      <span id="version" class="version">v0.3.0</span>
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true">▣</span>
+      <div><strong>BAODROID</strong><small>ANDROID PREVIEW • LOCAL</small></div>
+    </div>
+    <div class="header-right">
+      <span id="sdk-status" class="sdk-status">Đang kiểm tra Android SDK…</span>
+      <button id="btn-sdk" class="button quiet" title="Chọn thư mục Android SDK trên Windows">⚙ Android SDK</button>
+      <button id="btn-update" class="button quiet">↓ Kiểm tra bản vá</button>
+      <span class="version">v0.4.0</span>
     </div>
   </header>
-  <aside class="sidebar">
-    <div class="side-category">ĐIỀU HƯỚNG</div>
-    <button class="nav selected" data-target="dashboard"><span>▦</span><span class="nav-label">Tổng quan</span></button>
-    <button class="nav" data-target="projects"><span>▤</span><span class="nav-label">Dự án Android</span> <em id="nav-count">0/3</em></button>
-    <button class="nav" data-target="emulators"><span>▯</span><span class="nav-label">Máy ảo</span></button>
-    <button class="nav" data-target="logs"><span>≡</span><span class="nav-label">Nhật ký hoạt động</span></button>
-    <button class="nav" data-target="settings"><span>⚙</span><span class="nav-label">Cài đặt</span></button>
-    <div class="side-bottom">
-      <div class="side-heading">TÀI NGUYÊN</div>
-      <div class="stat-row"><span>Máy ảo đang chạy</span><b id="running-count">0 / 3</b></div>
-      <div class="meter"><div id="running-meter"></div></div>
-      <div class="stat-row"><span>Dự án đã kết nối</span><b id="side-projects">0 / 3</b></div>
-      <div class="meter"><div id="projects-meter"></div></div>
-      <div class="sidebar-foot"><span class="bullet-green">●</span> Windows • Chạy local</div>
-      <small>CPU / RAM thực: theo dõi bằng Task Manager Windows.</small>
-    </div>
-  </aside>
-  <main class="workspace" id="dashboard">
-    <div class="pageheading"><div><p class="eyebrow">WORKSPACE / OVERVIEW</p><h1>Trung tâm xem trước Android</h1><p class="subtitle">Ba máy ảo độc lập. Một dự án cho mỗi màn hình. Đồng bộ với VS Code qua thư mục local.</p></div><div class="heading-actions"><button class="btn secondary" id="btn-check-adb">Kiểm tra ADB</button><button class="btn primary" id="btn-add-project">＋ Thêm dự án</button></div></div>
-    <section class="projects folded" id="projects">
-      <div class="section-heading"><div><h2>Quản lý dự án <span id="project-title-count" class="subcount">0 / 3</span></h2><p>Tối đa ba dự án Android Gradle hoặc Flutter. Chọn dự án sẽ tự khởi chạy nếu có AVD.</p></div><button class="btn secondary" id="btn-toggle-projects" aria-expanded="false">▾ Hiện danh sách</button></div>
-      <div class="project-list" id="project-list"></div>
+  <main class="main">
+    <section class="intro">
+      <div class="intro-text">
+        <p class="eyebrow">WORKSPACE / LIVE PREVIEW</p>
+        <h1>Xem ứng dụng Android ngay khi sửa code</h1>
+        <p>Chọn thư mục dự án trên máy. Baodroid tự chạy Android ảo và cập nhật từ VS Code — không cần cắm USB.</p>
+      </div>
+      <button id="btn-add-project" class="button primary">＋ Thêm dự án</button>
     </section>
-    <div class="main-grid">
-      <section class="emulators" id="emulators">
-        <div class="section-heading preview-heading"><div><h2>Thiết bị xem trước <span class="subcount">3 thiết bị</span></h2><p>Chọn máy để phóng lớn • Tương tác trực tiếp bằng chuột • Mỗi máy gắn một dự án riêng</p></div>
-          <div class="preview-toolbar" role="group" aria-label="Chế độ xem trước">
-            <button class="view-btn active" data-view="all" aria-pressed="true">▦ 3 máy</button>
-            <button class="view-btn" data-view="0" aria-pressed="false">1</button>
-            <button class="view-btn" data-view="1" aria-pressed="false">2</button>
-            <button class="view-btn" data-view="2" aria-pressed="false">3</button>
-          </div></div>
-        <div class="preview-hint"><span class="dot green"></span> Ảnh thật qua ADB <span>•</span> <kbd>Esc</kbd> trở về chế độ 3 máy <span>•</span> Gập hai thanh bên để mở rộng preview</div>
-        <div class="device-grid" id="device-grid"></div>
-        <div class="device-foot">ⓘ Chọn dự án hoặc nhấn Kết nối VS Code trên từng máy; hệ thống tự ghép AVD còn trống và chạy. Cần Android SDK + ít nhất một AVD.</div>
-      </section>
-      <aside class="right-rail" id="right-rail">
-        <section class="panel pipeline"><div class="section-heading compact"><h2>⚡ Build / Deploy / Sync</h2><button class="rail-close" id="btn-rail-close" title="Thu gọn bảng tác vụ" aria-label="Thu gọn bảng tác vụ">»</button></div>
-          <div class="pipeline-steps"><div class="step"><span>01</span><b>File watcher</b><small>Phát hiện thay đổi</small></div><div class="arrow">↓</div><div class="step"><span>02</span><b>Incremental build</b><small>Gradle / Flutter</small></div><div class="arrow">↓</div><div class="step"><span>03</span><b>ADB deploy</b><small>Đẩy bản build lên thiết bị</small></div><div class="arrow">↓</div><div class="step"><span>04</span><b>Live preview</b><small>Ảnh màn hình cập nhật</small></div></div>
-          <div class="pipeline-note"><b>Đồng bộ tự động</b><p>Watcher xử lý sau khoảng 220 ms. Build và cập nhật giao diện thực tế có thể mất nhiều giây.</p></div>
-        </section>
-        <section class="panel settings" id="settings"><div class="section-heading compact"><h2>⚙ Cài đặt nhanh</h2></div>
-          <label class="input-label" for="sdk-path">Android SDK (Windows)</label><div class="path-input"><input id="sdk-path" spellcheck="false" placeholder="Chọn thư mục Android SDK" readonly/><button id="btn-sdk" title="Chọn Android SDK">▤</button></div>
-          <label class="input-label" for="screenshot-interval">Chu kỳ cập nhật màn hình</label><select id="screenshot-interval"><option value="1000">1 giây</option><option value="1500">1,5 giây</option><option value="2500">2,5 giây</option><option value="5000">5 giây (tiết kiệm CPU)</option></select>
-          <div class="toggle-row"><div><strong>Auto build</strong><small>Tự build khi lưu file</small></div><label class="switch"><input type="checkbox" id="auto-build" checked/><span></span></label></div>
-          <div class="toggle-row"><div><strong>Auto deploy</strong><small>Tự cài APK sau khi build</small></div><label class="switch"><input type="checkbox" id="auto-deploy" checked/><span></span></label></div>
-          <div class="toggle-row"><div><strong>Live screenshot</strong><small>Hiển thị màn hình Android</small></div><label class="switch"><input type="checkbox" id="screenshots" checked/><span></span></label></div>
-          <button class="btn secondary" id="btn-diagnostics" style="width:100%;margin-top:13px">⌁ Kiểm tra môi trường & VS Code</button>
-          <div id="diagnostics-output" class="diagnostics-output" hidden role="status"></div>
-          <div class="setting-foot">Tùy chọn được lưu tự động trên máy tính. Nếu không có AVD, hãy tạo trong Android Studio → Device Manager.</div>
-        </section>
-      </aside>
+    <div id="environment-alert" class="environment-alert" hidden>
+      <span id="environment-message"></span>
+      <button id="btn-sdk-help" class="button mini" hidden>Chọn Android SDK</button>
     </div>
-    <section class="panel logs" id="logs"><div class="section-heading compact"><div><h2>▤ Log & Trạng thái hệ thống</h2><p>Nhật ký build, ADB, emulator và đồng bộ dự án</p></div><div class="log-actions"><select id="log-filter"><option value="all">Tất cả</option><option value="error">Lỗi</option><option value="success">Thành công</option></select><button id="clear-logs" class="btn subtle">Xóa hiển thị</button></div></div><div class="log-output" id="log-output" aria-live="polite"></div></section>
-    <footer class="footer"><span>▣ Baodroid 0.3.0</span><span>Chỉ chạy local • Không tải mã nguồn dự án lên máy chủ</span><a href="https://github.com/techzoneadapter-droid/baodroid" id="repo-link">GitHub ↗</a></footer>
+    <section class="preview-area">
+      <div class="preview-toolbar">
+        <div class="preview-heading"><h2>Màn hình Android</h2><span id="project-count" class="pill">0 / 3 dự án</span></div>
+        <div class="view-group" role="group" aria-label="Số màn hình hiển thị">
+          <button data-view="all" class="view active" aria-pressed="true">3 máy</button>
+          <button data-view="0" class="view" aria-pressed="false">Máy 1</button>
+          <button data-view="1" class="view" aria-pressed="false">Máy 2</button>
+          <button data-view="2" class="view" aria-pressed="false">Máy 3</button>
+        </div>
+      </div>
+      <div id="device-grid" class="device-grid"></div>
+    </section>
+    <details id="log-panel" class="log-panel">
+      <summary>Nhật ký kỹ thuật (khi cần kiểm tra lỗi)</summary>
+      <div id="log-content" class="log-content" role="log"></div>
+    </details>
+    <footer>Baodroid chạy cục bộ trên Windows • Dùng Android Emulator và thư mục dự án ngay trên máy • Không cần điện thoại USB</footer>
   </main>
 </div>
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
-<div class="update-popup" id="update-popup" hidden><strong id="update-title">Kiểm tra phiên bản</strong><p id="update-message"></p><div id="update-bar" class="update-bar"><div></div></div><div class="update-controls"><button id="update-dismiss" class="btn secondary">Đóng</button><button id="update-action" class="btn primary" hidden>Tải bản vá</button></div></div>
-<script src="app.js"></script>
-</body></html>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<section id="update-popup" class="update-popup" hidden role="dialog" aria-label="Cập nhật Baodroid">
+  <h3 id="update-title">Kiểm tra bản vá</h3>
+  <p id="update-message">Đang kiểm tra…</p>
+  <div id="update-progress" class="progress" hidden><div></div></div>
+  <div class="update-buttons"><button id="update-dismiss" class="button quiet">Đóng</button><button id="update-action" class="button primary" hidden>Tải bản vá</button></div>
+</section>
+<script src="./app.js"></script>
+</body>
+</html>

@@ -19,7 +19,7 @@ function registerHandlers() {
     catch (error) { engine.log(`Lỗi: ${error.message}`, 'error'); return {ok:false, error: error.message}; }
   });
   register('get-state', () => engine.snapshot());
-  register('add-project', async () => { const folder = await chooseFolder({title:'Chọn dự án Android hoặc Flutter'}); return folder ? engine.addProject(folder) : null; });
+  register('add-project', async () => { const folder = await chooseFolder({title:'Chọn thư mục dự án Android / Flutter / React Native'}); return folder ? engine.addProject(folder) : null; });
   register('remove-project', (id) => engine.removeProject(id));
   register('assign-project', (slot, projectId) => engine.assignProject(slot, projectId));
   register('assign-avd', (slot, avd) => engine.assignAvd(slot, avd));
@@ -40,8 +40,15 @@ function registerHandlers() {
       const project = await engine.addProject(folder,slot);
       projectId = project.id;
     }
-    await engine.openVSCode(projectId);
-    return {projectId,slot,transport:'local-filesystem'};
+    let vscodeOpened=false;
+    try {
+      await engine.openVSCode(projectId);
+      vscodeOpened=true;
+    } catch(error) {
+      // Local folder watching does not require the VS Code executable to launch.
+      engine.log('VS Code chưa mở tự động: '+error.message,'warn',slot);
+    }
+    return {projectId,slot,transport:'local-filesystem',vscodeOpened};
   });
   register('tap', (slot,x,y) => engine.tap(slot,x,y));
   register('swipe', (slot,x1,y1,x2,y2,ms) => engine.swipe(slot,x1,y1,x2,y2,ms));
@@ -75,7 +82,7 @@ app.whenReady().then(async () => {
   win.loadFile(path.join(__dirname,'../renderer/index.html'));
   win.once('ready-to-show', () => { win.show(); void engine.resumeAssignedSlots(); });
   win.webContents.setWindowOpenHandler(({url}) => { if (url.startsWith('https://github.com/techzoneadapter-droid/baodroid')) shell.openExternal(url); return {action:'deny'}; });
-  engine.log('Baodroid sẵn sàng. Vui lòng chọn Android SDK, dự án và AVD.');
+  engine.log('Baodroid sẵn sàng. Chọn thư mục dự án để tự chạy trong Android Emulator cục bộ.');
 });
 app.on('before-quit', () => { if (engine) engine.dispose(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

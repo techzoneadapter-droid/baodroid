@@ -18,7 +18,7 @@ class Engine {
   constructor(store, emit) {
     this.store = store; this.emit = emit;
     this.devices = Array.from({length:3}, (_,i) => ({slot:i,status:'off',serial:`emulator-${5554 + i*2}`,preview:null,build:'idle',message:'Chưa khởi chạy',lastSync:null}));
-    this.workers = Array.from({length:3}, () => ({emulator:null,runner:null,watcher:null,timer:null,debounce:null,monitorTimer:null,recoveryTimer:null,recoveryAttempts:0,autoLaunching:false,adbFailures:0,previewFailures:0,bootedAt:0,generation:0,busy:false,dirty:false,manuallyDeploy:false,flutterReady:false}));
+    this.workers = Array.from({length:3}, () => ({emulator:null,runner:null,metro:null,metroLastStart:0,watcher:null,timer:null,debounce:null,monitorTimer:null,recoveryTimer:null,recoveryAttempts:0,autoLaunching:false,adbFailures:0,previewFailures:0,bootedAt:0,generation:0,busy:false,dirty:false,manuallyDeploy:false,flutterReady:false}));
     this.logs=[]; this.closed=false;
   }
   log(message, level='info', slot=null) {
@@ -213,7 +213,10 @@ class Engine {
     this.monitorDevice(slot,generation);
     this.captureLoop(slot,generation);
     if (project.kind==='flutter') this.startFlutter(slot,project,generation);
-    else this.queueBuild(slot,true);
+    else {
+      if (project.kind==='react-native') this.startMetro(slot,project,generation);
+      this.queueBuild(slot,true);
+    }
   }
   monitorDevice(slot,generation) {
     const worker=this.workers[slot];
@@ -222,7 +225,11 @@ class Engine {
       try {
         const state=await this.adb(slot,['get-state'],6500);
         if(state.stdout.trim()!=='device') throw new Error('Thiết bị chưa online.');
-        if(worker.adbFailures>0)this.log('ADB đã tự kết nối lại.','success',slot);
+        if(worker.adbFailures>0) {
+          this.log('ADB đã tự kết nối lại.','success',slot);
+          const projectId=this.store.data.slots[slot].projectId;
+          if(projectId && this.project(projectId).kind==='react-native')await this.configureMetroDevice(slot);
+        }
         worker.adbFailures=0;
         if(Date.now()-worker.bootedAt>60000)worker.recoveryAttempts=0;
       } catch(error) {
@@ -251,11 +258,64 @@ class Engine {
         this.log(`Thay đổi: ${path.relative(project.path,file)} → đồng bộ`, 'info',slot);
         if (project.kind==='flutter' && worker.runner && !worker.runner.killed && /\.(dart|yaml|json|png|jpg|jpeg|webp|svg)$/i.test(file)) {
           if (worker.runner.stdin?.writable) worker.runner.stdin.write('r');
+        } else if (project.kind==='react-native') {
+          // Metro watches JS/TS/CSS/assets itself: no full Gradle build on every save.
+          const relative=path.relative(project.path,file).replace(/\\/g,'/');
+          if(relative.startsWith('android/') || /^(package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml|app\.json)$/.test(relative)){
+            this.log('Thay đổi native/cấu hình React Native → build lại APK.','info',slot);
+            this.queueBuild(slot,false);
+          } else this.log('Metro đang nhận thay đổi → Fast Refresh.','info',slot);
         } else if (project.kind==='gradle') this.queueBuild(slot,false);
         else this.restartFlutter(slot,project);
       },220);
     });
     worker.watcher.on('error', e=>this.log('File watcher: '+e.message,'error',slot));
+  }
+  startMetro(slot,project,generation) {
+    const worker=this.workers[slot];
+    const port=8081+slot;
+    if(worker.metro && worker.metro.exitCode===null)return;
+    if(!fs.existsSync(path.join(project.path,'node_modules'))) {
+      const message='Thiếu node_modules. Cài dependencies trong VS Code (npm install/yarn install) để chạy Metro.';
+      this.log(message,'error',slot);
+      this.update(slot,{build:'error',message});
+      return;
+    }
+    // Each AVD gets an independent reverse tunnel: device:8081 -> PC:8081/8082/8083.
+    // No physical USB device or external preview server is needed.
+    const command=process.platform==='win32'?'npx.cmd':'npx';
+    let isExpo=false;
+    try {
+      const pkg=JSON.parse(fs.readFileSync(path.join(project.path,'package.json'),'utf8'));
+      isExpo=Boolean(pkg.dependencies?.expo || pkg.devDependencies?.expo);
+    }catch{/* use React Native CLI as default */}
+    const args=isExpo
+      ? ['--no-install','expo','start','--dev-client','--localhost','--port',String(port)]
+      : ['--no-install','react-native','start','--port',String(port)];
+    this.log(`Metro máy ${slot+1} dùng localhost:${port}.`,'info',slot);
+    worker.metroLastStart=Date.now();
+    const child=launch(command,args,{cwd:project.path,shell:process.platform==='win32',
+      onLine:line=>{
+        if(worker.generation!==generation)return;
+        if(/error|failed|cannot|exception/i.test(line))this.log('Metro: '+line,'error',slot);
+        else if(/ready|welcome to metro|fast refresh|bundle|transform/i.test(line))this.log('Metro: '+line,'success',slot);
+      }});
+    worker.metro=child;
+    child.on('error',error=>{
+      if(worker.generation!==generation)return;
+      this.log('Không mở được Metro: '+error.message+'. Kiểm tra Node.js và npm trên Windows.','error',slot);
+      if(worker.metro===child)worker.metro=null;
+    });
+    child.on('close',code=>{
+      if(worker.metro===child)worker.metro=null;
+      if(worker.generation!==generation || this.devices[slot].status!=='running')return;
+      this.log(`Metro đã thoát (mã ${code}). Fast Refresh bị tạm dừng.`,'warn',slot);
+    });
+  }
+  async configureMetroDevice(slot) {
+    const port=8081+slot;
+    await this.adb(slot,['reverse','tcp:8081',`tcp:${port}`],12000);
+    this.log(`Fast Refresh: Android ảo ${slot+1} → Metro localhost:${port}.`,'success',slot);
   }
   startFlutter(slot,project,generation) {
     const worker=this.workers[slot];
@@ -306,10 +366,12 @@ class Engine {
   async buildNative(slot,project,generation,mustDeploy) {
     const base=gradleRoot(project.path,project.kind);
     const gradle=gradleCommand(base);
-    this.update(slot,{build:'building',message:'Gradle incremental build...'});
+    this.update(slot,{build:'building',message:project.kind==='react-native'?'Đang build React Native Android…':'Gradle incremental build...'});
     const started=Date.now();
     const build=await new Promise((resolve,reject)=>{
-      const child=launch(gradle.cmd,[':app:assembleDebug','--build-cache','--max-workers=2','--console=plain'],{
+      const args=[':app:assembleDebug','--build-cache','--max-workers=2','--console=plain'];
+      if(project.kind==='react-native')args.push('-PreactNativeDevServerPort='+String(8081+slot));
+      const child=launch(gradle.cmd,args,{
         cwd:base,shell:gradle.shell,onLine:line=>{
           if (/FAILED|ERROR|error:/i.test(line)) this.log(line,'error',slot);
           else if (/BUILD SUCCESSFUL|BUILD FAILED/i.test(line)) this.log(line,'info',slot);
@@ -323,11 +385,12 @@ class Engine {
     const apk=findDebugApk(base);
     if (!apk) throw new Error('Không tìm thấy APK debug trong app/build/outputs/apk/debug.');
     if (mustDeploy) {
-      this.update(slot,{build:'deploying',message:'Đang cài đặt APK qua ADB...'});
+      this.update(slot,{build:'deploying',message:'Đang cài APK vào Android ảo...'});
+      if(project.kind==='react-native')await this.configureMetroDevice(slot);
       await this.adb(slot,['install','-r','-t',apk],120000);
       let appId=readApplicationId(project.path,project.kind);
       if (!appId) {
-        const dir=path.join(this.store.data.settings.sdkPath,'build-tools');
+        const dir=path.join(path.dirname(path.dirname(this.tools().adb)),'build-tools');
         if (fs.existsSync(dir)) {
           const versions=fs.readdirSync(dir).sort((a,b)=>b.localeCompare(a,undefined,{numeric:true}));
           for (const version of versions) {
@@ -426,6 +489,7 @@ class Engine {
     worker.monitorTimer=null;worker.recoveryTimer=null;
     if(worker.watcher){void worker.watcher.close();worker.watcher=null;}
     if(worker.runner){stopProcess(worker.runner);worker.runner=null;}
+    if(worker.metro){stopProcess(worker.metro);worker.metro=null;}
     if(worker.emulator){stopProcess(worker.emulator);worker.emulator=null;}
     worker.dirty=false;worker.busy=false;worker.flutterReady=false;worker.adbFailures=0;worker.previewFailures=0;
   }

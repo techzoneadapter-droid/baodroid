@@ -1,8 +1,8 @@
 {
   "name": "baodroid",
   "productName": "Baodroid",
-  "version": "0.3.0",
-  "description": "Local Windows Android preview hub for VS Code projects",
+  "version": "0.4.0",
+  "description": "Minimal local Android emulator preview for VS Code, React Native, Flutter and Gradle projects on Windows",
   "author": "Baodroid Contributors",
   "license": "MIT",
   "main": "src/main/index.js",

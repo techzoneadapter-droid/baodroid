@@ -8,14 +8,24 @@ function detectProject(folder) {
   }
   const exists = (file) => fs.existsSync(path.join(folder, file));
   if (exists('pubspec.yaml') && exists('android')) return 'flutter';
-  if ((exists('settings.gradle') || exists('settings.gradle.kts')) && exists('app')) return 'gradle';
-  if (exists('android') && (exists('package.json'))) {
-    throw new Error('React Native chưa được hỗ trợ ở bản này. Hãy dùng dự án Android Gradle hoặc Flutter.');
+  // React Native projects have a Gradle app nested inside android/.
+  // Some projects use Expo's bare workflow, which also has android/.
+  if (exists('android') && exists('package.json')) {
+    const android = path.join(folder,'android');
+    if (fs.existsSync(path.join(android,'settings.gradle')) || fs.existsSync(path.join(android,'settings.gradle.kts'))) {
+      let pkg={};
+      try {pkg=JSON.parse(fs.readFileSync(path.join(folder,'package.json'),'utf8'));}catch{/* malformed package, treat as generic React Native project */}
+      if (pkg.dependencies?.['react-native'] || pkg.devDependencies?.['react-native'] ||
+          pkg.dependencies?.expo || pkg.devDependencies?.expo || fs.existsSync(path.join(folder,'index.js')))
+        return 'react-native';
+      return 'react-native';
+    }
   }
-  throw new Error('Không tìm thấy dự án Android Gradle hoặc Flutter hợp lệ.');
+  if ((exists('settings.gradle') || exists('settings.gradle.kts')) && exists('app')) return 'gradle';
+  throw new Error('Không tìm thấy dự án Android Gradle, Flutter hoặc React Native hợp lệ.');
 }
 function readApplicationId(projectRoot, kind) {
-  const base = kind === 'flutter' ? path.join(projectRoot, 'android') : projectRoot;
+  const base = kind === 'flutter' || kind === 'react-native' ? path.join(projectRoot, 'android') : projectRoot;
   for (const p of ['app/build.gradle.kts', 'app/build.gradle']) {
     const file = path.join(base, p);
     if (!fs.existsSync(file)) continue;
@@ -25,7 +35,7 @@ function readApplicationId(projectRoot, kind) {
   }
   return null;
 }
-function gradleRoot(folder, kind) { return kind === 'flutter' ? path.join(folder, 'android') : folder; }
+function gradleRoot(folder, kind) { return kind === 'flutter' || kind === 'react-native' ? path.join(folder, 'android') : folder; }
 function findDebugApk(projectRoot) {
   const target = path.join(projectRoot, 'app', 'build', 'outputs', 'apk', 'debug');
   if (!fs.existsSync(target)) return null;

@@ -38,3 +38,11 @@ test('cannot assign the same project to two devices',async()=>{
   const engine=makeEngine();
   await assert.rejects(()=>engine.assignProject(2,'a'),/Mỗi dự án/);
 });
+
+test('React Native uses independent local Metro port and emulator ADB reverse',()=>{
+  const fs=require('node:fs');
+  const source=fs.readFileSync(require('node:path').join(__dirname,'../src/main/engine.js'),'utf8');
+  assert.match(source,/8081\+slot/);
+  assert.match(source,/\['reverse','tcp:8081'/);
+  assert.match(source,/project\.kind==='react-native'/);
+});
