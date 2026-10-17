@@ -46,3 +46,27 @@ test('React Native uses independent local Metro port and emulator ADB reverse',(
   assert.match(source,/\['reverse','tcp:8081'/);
   assert.match(source,/project\.kind==='react-native'/);
 });
+
+test('native mode resolves Vite to Capacitor and Expo Web to React Native for build and reload',()=>{
+  const engine=makeEngine();
+  engine.store.data.projects[0]={id:'a',name:'ReelTara',path:'C:/ReelTara',kind:'web'};
+  engine.store.data.projects[1]={id:'b',name:'chuong',path:'C:/chuong',kind:'expo-web'};
+  engine.store.data.slots[0].nativeMode=true;
+  engine.store.data.slots[1].nativeMode=true;
+  assert.equal(engine.projectForSlot(0).kind,'capacitor');
+  assert.equal(engine.projectForSlot(1).kind,'react-native');
+  engine.store.data.slots[0].nativeMode=false;
+  assert.equal(engine.projectForSlot(0).kind,'web');
+});
+test('build loop passes effective Capacitor kind, not the original web type',async()=>{
+  const engine=makeEngine();
+  engine.store.data.projects[0]={id:'a',name:'ReelTara',path:'C:/ReelTara',kind:'web'};
+  engine.store.data.slots[0].nativeMode=true;
+  engine.devices[0].status='running';
+  const worker=engine.workers[0];
+  worker.generation=3;worker.dirty=true;worker.manuallyDeploy=true;
+  const calls=[];
+  engine.buildNative=async(slot,project,generation,deploy)=>calls.push({slot,kind:project.kind,generation,deploy});
+  await engine.buildLoop(0,3);
+  assert.deepEqual(calls,[{slot:0,kind:'capacitor',generation:3,deploy:true}]);
+});

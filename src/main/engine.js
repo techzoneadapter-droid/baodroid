@@ -34,6 +34,15 @@ class Engine {
   requireSlot(i) { if (!isSlot(i)) throw new Error('Máy ảo không hợp lệ.'); return i; }
   requireStopped(i) { if (this.devices[i].status !== 'off' && this.devices[i].status !== 'error') throw new Error('Dừng máy ảo trước khi thay đổi dự án hoặc thiết bị.'); }
   project(id) { const result = this.store.data.projects.find(p => p.id === id); if (!result) throw new Error('Không tìm thấy dự án.'); return result; }
+  projectForSlot(slot) {
+    this.requireSlot(slot);
+    const assigned=this.store.data.slots[slot];
+    if (!assigned?.projectId) throw new Error('Chưa chọn dự án cho máy Android.');
+    const source=this.project(assigned.projectId);
+    const kind=assigned.nativeMode && source.kind==='web' ? 'capacitor' :
+      assigned.nativeMode && source.kind==='expo-web' ? 'react-native' : source.kind;
+    return {...source,kind};
+  }
   addProject(folder, preferredSlot=null) {
     if (this.store.data.projects.length >= 3) throw new Error('Giới hạn tối đa 3 dự án.');
     const normalized = path.resolve(folder);
@@ -179,10 +188,7 @@ class Engine {
     this.requireSlot(slot); this.requireStopped(slot);
     const assigned=this.store.data.slots[slot];
     if (!assigned.projectId || !assigned.avd) throw new Error('Chọn dự án và AVD trước khi khởi chạy.');
-    const original=this.project(assigned.projectId);
-    const kind=assigned.nativeMode && original.kind==='web'?'capacitor':
-      assigned.nativeMode && original.kind==='expo-web'?'react-native':original.kind;
-    const project={...original,kind};
+    const project=this.projectForSlot(slot);
     detectProject(project.path);
     const avds=await this.listAvds();
     if (!avds.includes(assigned.avd)) throw new Error('AVD không tồn tại trong Android SDK: '+assigned.avd);
@@ -365,7 +371,8 @@ class Engine {
         worker.dirty=false;
         const mustDeploy=worker.manuallyDeploy || this.store.data.settings.autoDeploy;
         worker.manuallyDeploy=false;
-        const project=this.project(this.store.data.slots[slot].projectId);
+        const project=this.projectForSlot(slot);
+        this.log('Build ứng dụng '+project.name+' (loại '+project.kind+') cho máy '+(slot+1)+'.','info',slot);
         try {await this.buildNative(slot,project,generation,mustDeploy);}
         catch(e) {this.failBuild(slot,e);}
       }
@@ -417,8 +424,15 @@ class Engine {
           }
         }
       }
-      if (appId) await this.adb(slot,['shell','monkey','-p',appId,'-c','android.intent.category.LAUNCHER','1'],12000);
-      else this.log('APK đã được cài đặt, nhưng chưa xác định được applicationId để tự mở.', 'warn',slot);
+      if(appId) {
+        this.log('Đã cài APK: '+appId+'. Đang mở ứng dụng trên Android.','success',slot);
+        const launched=await this.adb(slot,['shell','monkey','-p',appId,'-c','android.intent.category.LAUNCHER','1'],15000);
+        if(/No activities found|monkey aborted/i.test(launched.stdout+launched.stderr))
+          throw new Error('APK đã cài nhưng không tìm thấy màn hình khởi động. Kiểm tra AndroidManifest.xml: '+appId);
+        this.log('Đã gửi lệnh mở '+appId+' trên Android.','success',slot);
+      } else {
+        throw new Error('Đã cài APK nhưng không nhận diện được applicationId để mở. Kiểm tra build.gradle/AndroidManifest.xml.');
+      }
     }
     const time=((Date.now()-started)/1000).toFixed(1);
     this.update(slot,{build:'success',lastSync:new Date().toISOString(),message:`Đồng bộ hoàn tất (${time}s)`});
@@ -445,7 +459,7 @@ class Engine {
   async reloadSlot(slot) {
     this.requireSlot(slot);
     if (this.devices[slot].status!=='running') throw new Error('Máy ảo chưa chạy.');
-    const project=this.project(this.store.data.slots[slot].projectId);
+    const project=this.projectForSlot(slot);
     if (project.kind==='flutter') this.restartFlutter(slot,project);
     else this.queueBuild(slot,true);
     return true;

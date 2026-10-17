@@ -41,3 +41,12 @@ npm run dist:win
 ```
 
 GitHub Actions build Windows x64, xuất bản release và `latest.yml` để nút **Kiểm tra bản vá** sử dụng.
+
+
+## Bản vá v0.8.1 — Android chạy nhưng chưa tự mở ứng dụng
+
+Trong v0.8.0, sau khi ReelTara/CHƯƠNG đã bật chế độ Android native, bước khởi động emulator nhận đúng dạng ứng dụng Capacitor/React Native, nhưng **build loop** lại lấy loại dự án gốc (web/expo-web). Điều này có thể khiến Gradle tìm sai thư mục và màn hình chỉ dừng ở Android launcher.
+
+v0.8.1 dùng duy nhất `projectForSlot(slot)` cho cả khởi động và build: ReelTara web → Capacitor; CHƯƠNG Expo Web → React Native sau prebuild. Khi Android boot xong, Baodroid sẽ tự chạy Gradle, tìm APK, cài vào AVD và gửi lệnh mở ứng dụng. Giao diện hiển thị rõ **đang build APK / đang cài APK / build lỗi**. Khi build lỗi, bấm **Thử build & mở lại** (không cần cài SDK hoặc tạo AVD lần nữa). Nhật ký kỹ thuật lưu bước build/đường dẫn dự án chính xác.
+
+Bản vá sửa workflow build/deploy nhưng vẫn cần kiểm thử thực tế với dự án trên máy Windows. Gradle lần đầu có thể lâu và có thể thất bại do Java/Gradle/plugin, không có cam kết chạy thành công với mọi dự án.

@@ -30,6 +30,10 @@ const statusText=status=>({off:'Đã dừng',booting:'Đang chuẩn bị',runnin
 const buildText=build=>({building:'Đang chuẩn bị preview…',deploying:'Đang cài APK…',success:'Đã đồng bộ',error:'Cần kiểm tra',idle:'Chưa chạy'})[build]||'Chờ đồng bộ';
 const webKind=kind=>kind==='web'||kind==='expo-web';
 const safePreviewURL=url=>/^http:\/\/127\.0\.0\.1:4312[0-2]\/$/.test(url||'');
+const nativeProgressText=device=>{
+ if(device.status!=='running')return '';
+ return ({idle:'Android đã mở. Đang chuẩn bị build ứng dụng…',building:'Đang build APK từ mã nguồn dự án, vui lòng đợi…',deploying:'Đã build xong. Đang cài và mở ứng dụng Android…',error:'Không build hoặc mở được ứng dụng. Xem nhật ký và bấm Thử lại.',success:'Ứng dụng Android đã build và gửi lệnh mở.'})[device.build]||'';
+};
 function cardHTML(i){
  const config=state.config.slots[i]||{};
  const device=state.devices[i]||{status:'off',build:'idle',message:'Chưa chạy'};
@@ -64,6 +68,10 @@ function cardHTML(i){
       (webKind(project.kind)?'<button class="button quiet" data-web-slot="'+i+'">↩ Xem Web</button>':''):
       '<button class="button native-setup" data-native-slot="'+i+'">⚙ Khởi tạo Android SDK & AVD</button>')+
     '</div>':'')+
+  (project&&!isWeb?
+    '<div class="native-progress" data-native-progress="'+i+'"'+(!nativeProgressText(device)?' hidden':'')+'>'+
+    '<span>'+escapeHTML(nativeProgressText(device))+'</span>'+
+    '<button class="button quiet" data-retry-build="'+i+'"'+(device.status==='running'&&device.build==='error'?'':' hidden')+'>↻ Thử build & mở lại</button></div>':'')+
   '<div class="screen-wrap"><div class="phone"><div class="screen" data-touch-slot="'+i+'">'+
   (url?'<iframe class="web-frame" loading="eager" title="Mobile Web Preview '+(i+1)+'" src="'+escapeHTML(url)+'" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerpolicy="no-referrer"></iframe>':
   picture?'<img src="'+picture.image+'" draggable="false" alt="Preview Android '+(i+1)+'">':
@@ -94,6 +102,15 @@ function render(){
      const build=current.querySelector('.device-details .build');
      if(details)details.textContent=device.message||'';
      if(build)build.textContent=buildText(device.build);
+     const status=current.querySelector('[data-native-progress]');
+     if(status){
+       const text=nativeProgressText(device);
+       status.hidden=!text;
+       const label=status.querySelector('span');
+       if(label)label.textContent=text;
+       const retry=status.querySelector('[data-retry-build]');
+       if(retry)retry.hidden=device.status!=='running'||device.build!=='error';
+     }
    }
  }
  if(!pinnedView&&view==='all'&&state.config.projects.some(p=>webKind(p.kind))){
@@ -114,6 +131,14 @@ function setView(next){
  });
 }
 function wireCards(){
+ document.querySelectorAll('[data-retry-build]').forEach(el=>{
+   if(el.dataset.bound)return;el.dataset.bound='1';
+   el.addEventListener('click',async()=>{
+     el.disabled=true;
+     await invoke('reloadSlot',Number(el.dataset.retryBuild));
+     el.disabled=false;
+   });
+ });
  document.querySelectorAll('[data-native-slot]').forEach(el=>{
    if(el.dataset.bound)return;el.dataset.bound='1';
    el.addEventListener('click',async ()=>{

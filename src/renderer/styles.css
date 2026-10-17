@@ -183,3 +183,9 @@ footer{margin-top:auto;color:#6483a1;text-align:center;font-size:11px;padding:5p
 .android-setup-actions .quiet{font-size:11px;min-height:34px}
 .device-card:has(.native-active){border-color:#308c78}
 .device-details .message{overflow-wrap:anywhere}
+
+/* v0.8.1: clearly distinguish Android boot from APK build/deploy */
+.native-progress{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;border:1px solid #27719a;border-radius:8px;background:#12354c;padding:9px 11px;color:#b9eaff;font-size:11px;line-height:1.55}
+.native-progress span{flex:1;min-width:0;overflow-wrap:anywhere}
+.native-progress .button{min-height:30px;padding:5px 9px;font-size:10px}
+.native-progress:has([data-retry-build]:not([hidden])){border-color:#9b7e4d;background:#393027;color:#f5d9a3}
