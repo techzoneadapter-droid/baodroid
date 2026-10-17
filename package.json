@@ -1,0 +1,36 @@
+{
+  "name": "baodroid",
+  "productName": "Baodroid",
+  "version": "0.1.0",
+  "description": "Local Windows Android preview hub for VS Code projects",
+  "author": "Baodroid Contributors",
+  "license": "MIT",
+  "main": "src/main/index.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "test": "node --test tests/*.test.js",
+    "check": "node --check src/main/index.js && node --check src/main/engine.js && node --check src/main/process.js && node --check src/main/update.js && node --check src/renderer/app.js",
+    "dist:win": "electron-builder --win nsis --publish never",
+    "release:win": "electron-builder --win nsis --publish always"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "electron-log": "^5.4.0",
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "electron": "^37.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "dev.baodroid.desktop",
+    "productName": "Baodroid",
+    "asar": true,
+    "files": ["src/**/*", "assets/**/*", "package.json"],
+    "directories": {"output": "dist"},
+    "publish": [{"provider": "github", "owner": "techzoneadapter-droid", "repo": "baodroid", "releaseType": "release"}],
+    "win": {"target": [{"target": "nsis", "arch": ["x64"]}], "executableName": "Baodroid"},
+    "nsis": {"oneClick": false, "allowToChangeInstallationDirectory": true, "createDesktopShortcut": true, "createStartMenuShortcut": true, "shortcutName": "Baodroid", "artifactName": "Baodroid-Setup-${version}.${ext}"}
+  }
+}

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'"/>
+<title>Baodroid — Android Preview Hub</title>
+<link rel="stylesheet" href="styles.css"/>
+</head><body>
+<div id="app" class="shell">
+  <header class="topbar">
+    <div class="identity"><div class="brandmark">▣</div><div class="brand"><strong>BAODROID</strong><span>ANDROID PREVIEW HUB</span></div></div>
+    <div class="header-divider"></div>
+    <div class="connection"><span class="pulse"></span><span>Workspace cục bộ</span><span class="tag">VS Code</span></div>
+    <div class="header-actions">
+      <button class="top-action" id="btn-refresh">⟳ <span>Làm mới</span></button>
+      <button class="top-action" id="btn-update">↓ <span>Kiểm tra bản vá</span></button>
+      <button class="top-action small" id="btn-settings">⚙</button>
+      <span id="version" class="version">v0.1.0</span>
+    </div>
+  </header>
+  <aside class="sidebar">
+    <div class="side-category">ĐIỀU HƯỚNG</div>
+    <button class="nav selected" data-target="dashboard"><span>▦</span> Tổng quan</button>
+    <button class="nav" data-target="projects"><span>▤</span> Dự án Android <em id="nav-count">0/3</em></button>
+    <button class="nav" data-target="emulators"><span>▯</span> Máy ảo</button>
+    <button class="nav" data-target="logs"><span>≡</span> Nhật ký hoạt động</button>
+    <button class="nav" data-target="settings"><span>⚙</span> Cài đặt</button>
+    <div class="side-bottom">
+      <div class="side-heading">TÀI NGUYÊN</div>
+      <div class="stat-row"><span>Máy ảo đang chạy</span><b id="running-count">0 / 3</b></div>
+      <div class="meter"><div id="running-meter"></div></div>
+      <div class="stat-row"><span>Dự án đã kết nối</span><b id="side-projects">0 / 3</b></div>
+      <div class="meter"><div id="projects-meter"></div></div>
+      <div class="sidebar-foot"><span class="bullet-green">●</span> Windows • Chạy local</div>
+      <small>CPU / RAM thực: theo dõi bằng Task Manager Windows.</small>
+    </div>
+  </aside>
+  <main class="workspace" id="dashboard">
+    <div class="pageheading"><div><p class="eyebrow">WORKSPACE / OVERVIEW</p><h1>Trung tâm xem trước Android</h1><p class="subtitle">Ba máy ảo độc lập. Một dự án cho mỗi màn hình. Đồng bộ với VS Code qua thư mục local.</p></div><div class="heading-actions"><button class="btn secondary" id="btn-check-adb">Kiểm tra ADB</button><button class="btn primary" id="btn-add-project">＋ Thêm dự án</button></div></div>
+    <section class="projects" id="projects">
+      <div class="section-heading"><div><h2>Quản lý dự án <span id="project-title-count" class="subcount">0 / 3</span></h2><p>Tối đa ba thư mục dự án Android Gradle hoặc Flutter.</p></div><span class="section-detail">Mỗi điện thoại ↔ một dự án</span></div>
+      <div class="project-list" id="project-list"></div>
+    </section>
+    <div class="main-grid">
+      <section class="emulators" id="emulators">
+        <div class="section-heading"><div><h2>Thiết bị xem trước <span class="subcount">3 thiết bị</span></h2><p>Màn hình Android thực qua ADB • Nhấn hoặc vuốt trực tiếp trên ảnh xem trước</p></div><div class="legend"><span class="dot green"></span> Đang chạy <span class="dot gray"></span> Chưa chạy</div></div>
+        <div class="device-grid" id="device-grid"></div>
+        <div class="device-foot">ⓘ Cần Android SDK + Emulator + ít nhất một AVD đã tạo. Thời gian dựng APK/Flutter phụ thuộc dự án và cấu hình PC.</div>
+      </section>
+      <aside class="right-rail">
+        <section class="panel pipeline"><div class="section-heading compact"><h2>⚡ Build / Deploy / Sync</h2></div>
+          <div class="pipeline-steps"><div class="step"><span>01</span><b>File watcher</b><small>Phát hiện thay đổi</small></div><div class="arrow">↓</div><div class="step"><span>02</span><b>Incremental build</b><small>Gradle / Flutter</small></div><div class="arrow">↓</div><div class="step"><span>03</span><b>ADB deploy</b><small>Đẩy bản build lên thiết bị</small></div><div class="arrow">↓</div><div class="step"><span>04</span><b>Live preview</b><small>Ảnh màn hình cập nhật</small></div></div>
+          <div class="pipeline-note"><b>Đồng bộ tự động</b><p>Watcher xử lý sau khoảng 220 ms. Build và cập nhật giao diện thực tế có thể mất nhiều giây.</p></div>
+        </section>
+        <section class="panel settings" id="settings"><div class="section-heading compact"><h2>⚙ Cài đặt nhanh</h2></div>
+          <label class="input-label" for="sdk-path">Android SDK (Windows)</label><div class="path-input"><input id="sdk-path" spellcheck="false" placeholder="Chọn thư mục Android SDK" readonly/><button id="btn-sdk" title="Chọn Android SDK">▤</button></div>
+          <label class="input-label" for="screenshot-interval">Chu kỳ cập nhật màn hình</label><select id="screenshot-interval"><option value="1000">1 giây</option><option value="1500">1,5 giây</option><option value="2500">2,5 giây</option><option value="5000">5 giây (tiết kiệm CPU)</option></select>
+          <div class="toggle-row"><div><strong>Auto build</strong><small>Tự build khi lưu file</small></div><label class="switch"><input type="checkbox" id="auto-build" checked/><span></span></label></div>
+          <div class="toggle-row"><div><strong>Auto deploy</strong><small>Tự cài APK sau khi build</small></div><label class="switch"><input type="checkbox" id="auto-deploy" checked/><span></span></label></div>
+          <div class="toggle-row"><div><strong>Live screenshot</strong><small>Hiển thị màn hình Android</small></div><label class="switch"><input type="checkbox" id="screenshots" checked/><span></span></label></div>
+          <div class="setting-foot">Tùy chọn được lưu tự động trên máy tính.</div>
+        </section>
+      </aside>
+    </div>
+    <section class="panel logs" id="logs"><div class="section-heading compact"><div><h2>▤ Log & Trạng thái hệ thống</h2><p>Nhật ký build, ADB, emulator và đồng bộ dự án</p></div><div class="log-actions"><select id="log-filter"><option value="all">Tất cả</option><option value="error">Lỗi</option><option value="success">Thành công</option></select><button id="clear-logs" class="btn subtle">Xóa hiển thị</button></div></div><div class="log-output" id="log-output" aria-live="polite"></div></section>
+    <footer class="footer"><span>▣ Baodroid 0.1.0</span><span>Chỉ chạy local • Không tải mã nguồn dự án lên máy chủ</span><a href="https://github.com/techzoneadapter-droid/baodroid" id="repo-link">GitHub ↗</a></footer>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="update-popup" id="update-popup" hidden><strong id="update-title">Kiểm tra phiên bản</strong><p id="update-message"></p><div id="update-bar" class="update-bar"><div></div></div><div class="update-controls"><button id="update-dismiss" class="btn secondary">Đóng</button><button id="update-action" class="btn primary" hidden>Tải bản vá</button></div></div>
+<script src="app.js"></script>
+</body></html>
