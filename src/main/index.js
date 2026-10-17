@@ -6,7 +6,8 @@ const {Store} = require('./store');
 const {Engine} = require('./engine');
 const {UpdateManager} = require('./update');
 const {AIManager} = require('./ai');
-let win, engine, updater, ai;
+const {WebPreviewManager} = require('./web-preview');
+let win, engine, updater, ai, webPreview;
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 function send(topic, data) { if (win && !win.isDestroyed()) win.webContents.send(topic, data); }
@@ -31,6 +32,7 @@ function registerHandlers() {
   });
   register('assign-avd', (slot, avd) => engine.assignAvd(slot, avd));
   register('list-avds', () => engine.listAvds());
+  register('install-web-deps', (slot) => webPreview.installDependencies(slot));
   register('choose-sdk', async () => { const folder = await chooseFolder({title:'Chọn thư mục Android SDK'}); return folder ? engine.configure({sdkPath: folder}) : null; });
   register('set-settings', (settings) => engine.configure(settings));
   register('start-slot', (slot) => engine.startSlot(slot));
@@ -84,6 +86,8 @@ function registerHandlers() {
 app.whenReady().then(async () => {
   const store = new Store(app.getPath('userData'));
   engine = new Engine(store, send);
+  webPreview = new WebPreviewManager(engine);
+  engine.webPreview = webPreview;
   ai = new AIManager(engine,send);
   updater = new UpdateManager(value => send('update-status', value));
   registerHandlers();

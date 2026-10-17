@@ -144,3 +144,13 @@ footer{margin-top:auto;color:#6483a1;text-align:center;font-size:11px;padding:5p
 .ai-diff-columns strong{font-size:11px;color:#9ad6ef}
 .ai-diff-columns pre{max-height:230px;min-height:65px;overflow:auto;padding:7px;margin:5px 0 0;border:1px solid #33546b;border-radius:5px;background:#061725;color:#bcd7eb;font:10px/1.5 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:1000px){.ai-diff-columns{grid-template-columns:1fr}}
+
+/* v0.6 - mobile browser previews for Vite/Expo, zero Android SDK needed */
+.screen:has(.web-frame){touch-action:auto}
+.web-frame{display:block;position:absolute;inset:0;width:100%;height:100%;border:0;background:white;overflow:auto}
+.install-deps{width:100%;white-space:normal;padding:10px 8px;font-size:11px}
+.device-details .message{min-height:29px}
+.status-label{max-width:58%;overflow:hidden;text-overflow:ellipsis}
+.device-card .screen-wrap{min-width:0}
+.device-grid.focus .phone{width:min(100%,385px)}
+.device-card .screen .camera{z-index:3}

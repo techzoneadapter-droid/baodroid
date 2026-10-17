@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'none'; frame-src http://127.0.0.1:* http://localhost:*; object-src 'none'; base-uri 'none'; form-action 'none'">
 <title>Baodroid — Android Preview</title>
 <link rel="stylesheet" href="./styles.css">
 </head>
@@ -18,15 +18,15 @@
       <span id="sdk-status" class="sdk-status">Đang kiểm tra Android SDK…</span>
       <button id="btn-sdk" class="button quiet" title="Chọn thư mục Android SDK trên Windows">⚙ Android SDK</button>
       <button id="btn-update" class="button quiet">↓ Kiểm tra bản vá</button>
-      <span class="version">v0.5.0</span>
+      <span class="version">v0.6.0</span>
     </div>
   </header>
   <main class="main">
     <section class="intro">
       <div class="intro-text">
         <p class="eyebrow">WORKSPACE / LIVE PREVIEW</p>
-        <h1>Xem và chỉnh sửa ứng dụng Android bằng AI</h1>
-        <p>Gắn mỗi dự án với một máy Android ảo. Chỉnh code bằng ChatGPT/Codex ngay dưới preview hoặc tiếp tục dùng VS Code.</p>
+        <h1>Preview 3 dự án từ thư mục Windows</h1>
+        <p>Chọn thư mục dự án trên máy: React/Vite và Expo chạy bản xem trước mobile không cần Android SDK. Với ứng dụng native, Baodroid dùng Android Emulator nếu có.</p>
       </div>
       <button id="btn-add-project" class="button primary">＋ Thêm dự án</button>
     </section>
@@ -36,7 +36,7 @@
     </div>
     <section class="preview-area">
       <div class="preview-toolbar">
-        <div class="preview-heading"><h2>Màn hình Android</h2><span id="project-count" class="pill">0 / 3 dự án</span></div>
+        <div class="preview-heading"><h2>Preview ứng dụng</h2><span id="project-count" class="pill">0 / 3 dự án</span></div>
         <div class="view-group" role="group" aria-label="Số màn hình hiển thị">
           <button data-view="all" class="view active" aria-pressed="true">3 máy</button>
           <button data-view="0" class="view" aria-pressed="false">Máy 1</button>

@@ -8,6 +8,19 @@ function detectProject(folder) {
   }
   const exists = (file) => fs.existsSync(path.join(folder, file));
   if (exists('pubspec.yaml') && exists('android')) return 'flutter';
+  let pkg = null;
+  if (exists('package.json')) {
+    try { pkg = JSON.parse(fs.readFileSync(path.join(folder,'package.json'),'utf8')); }
+    catch { throw new Error('package.json không đọc được. Kiểm tra JSON của dự án.'); }
+  }
+  // Expo managed projects (e.g. CHUONG) may not have android/ at all.
+  // Prefer zero-SDK mobile web preview; native device testing remains optional.
+  if (pkg && (pkg.dependencies?.expo || pkg.devDependencies?.expo)) return 'expo-web';
+  // Mobile-friendly Vite/React/Capacitor projects (e.g. ReelTara, MiniZap).
+  if (pkg && (pkg.devDependencies?.vite || pkg.dependencies?.vite ||
+      exists('vite.config.ts') || exists('vite.config.js')) &&
+      (pkg.scripts?.dev || pkg.scripts?.start)) return 'web';
+
   // React Native projects have a Gradle app nested inside android/.
   // Some projects use Expo's bare workflow, which also has android/.
   if (exists('android') && exists('package.json')) {

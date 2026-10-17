@@ -19,7 +19,7 @@ class Engine {
     this.store = store; this.emit = emit;
     this.devices = Array.from({length:3}, (_,i) => ({slot:i,status:'off',serial:`emulator-${5554 + i*2}`,preview:null,build:'idle',message:'Chưa khởi chạy',lastSync:null}));
     this.workers = Array.from({length:3}, () => ({emulator:null,runner:null,metro:null,metroLastStart:0,watcher:null,timer:null,debounce:null,monitorTimer:null,recoveryTimer:null,recoveryAttempts:0,autoLaunching:false,adbFailures:0,previewFailures:0,bootedAt:0,generation:0,busy:false,dirty:false,manuallyDeploy:false,flutterReady:false}));
-    this.logs=[]; this.closed=false;
+    this.logs=[]; this.closed=false; this.webPreview=null;
   }
   log(message, level='info', slot=null) {
     const record = {time:new Date().toLocaleTimeString('vi-VN', {hour12:false}), message:String(message).slice(0,900), level, slot};
@@ -51,6 +51,7 @@ class Engine {
   removeProject(id) {
     this.project(id);
     if (this.store.data.slots.some((s,i) => s.projectId===id && this.devices[i].status !== 'off' && this.devices[i].status !== 'error')) throw new Error('Dừng máy ảo của dự án trước khi xóa.');
+    for(let i=0;i<3;i++)if(this.store.data.slots[i].projectId===id && this.webPreview?.isWebSlot(i))this.webPreview.stop(i);
     this.store.data.projects=this.store.data.projects.filter(x => x.id!==id);
     for (const s of this.store.data.slots) if (s.projectId===id) s.projectId=null;
     this.changed(); return true;
@@ -83,6 +84,10 @@ class Engine {
     worker.autoLaunching=true;
     try {
       const assigned=this.store.data.slots[slot];
+      const project=this.project(assigned.projectId);
+      if((project.kind==='web'||project.kind==='expo-web') && this.webPreview) {
+        return this.webPreview.start(slot);
+      }
       if (!assigned.avd) {
         const avds=await this.listAvds();
         const available=chooseFreeAvd(avds,this.store.data.slots,slot);
@@ -495,6 +500,12 @@ class Engine {
   }
   async stopSlot(slot) {
     this.requireSlot(slot);
+    if(this.webPreview?.isWebSlot(slot)){
+      this.webPreview.stop(slot);
+      this.clearWorker(slot);
+      this.update(slot,{status:'off',previewMode:null,webUrl:null,build:'idle',message:'Đã dừng Web Preview',lastSync:null});
+      return true;
+    }
     const previous=this.devices[slot].status;
     this.clearWorker(slot);
     this.workers[slot].recoveryAttempts=0;
@@ -508,8 +519,9 @@ class Engine {
   dispose() {
     if(this.closed)return;
     this.closed=true;
+    if(this.webPreview)this.webPreview.dispose();
     for(let i=0;i<3;i++) {
-      if(this.devices[i].status==='running'||this.devices[i].status==='booting') {
+      if(!this.webPreview?.isWebSlot(i) && (this.devices[i].status==='running'||this.devices[i].status==='booting')) {
         // Exit asynchronously without blocking Electron shutdown.
         const adb=toolsForSdk(sdkRoot(this.store.data.settings.sdkPath)).adb;
         try {const proc=spawn(adb,['-s',this.devices[i].serial,'emu','kill'],{windowsHide:true,detached:true,stdio:'ignore'});proc.on('error',()=>{});proc.unref();}catch{/* skip */}

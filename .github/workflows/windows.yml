@@ -75,5 +75,5 @@ jobs:
           if (-not ($assets.Name -match '^Baodroid-Setup-.*\.exe$')) { throw "Missing NSIS installer" }
           if (-not ($assets.Name -contains 'latest.yml')) { throw "Missing latest.yml updater metadata" }
           $paths = @($assets | ForEach-Object { $_.FullName })
-          gh release create $tag @paths --target main --title "Baodroid $tag" --notes "Baodroid 0.5: per-project Codex coding sessions, ChatGPT browser sign in, model selector, direct edits and Undo snapshots, with three independent Android previews."
+          gh release create $tag @paths --target main --title "Baodroid $tag" --notes "Baodroid 0.6: preview ReelTara/Vite and CHUONG/Expo from a local folder without Android SDK, use Android Emulator only for native apps; keeps independent Codex chats."
           if ($LASTEXITCODE -ne 0) { throw "Release upload failed" }
