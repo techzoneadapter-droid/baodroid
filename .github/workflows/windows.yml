@@ -28,6 +28,15 @@ jobs:
             git commit -m 'chore: unpack Baodroid source files'
             git push origin HEAD:main
           }
+          if (Test-Path 'bootstrap/patch.zip') {
+            Expand-Archive 'bootstrap/patch.zip' -DestinationPath . -Force
+            Remove-Item -Recurse -Force bootstrap
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git config user.name 'github-actions[bot]'
+            git add -A
+            git commit -m 'feat: unpack Baodroid UX update 0.2.0'
+            git push origin HEAD:main
+          }
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Run tests
@@ -51,3 +60,20 @@ jobs:
           path: dist/*.exe
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish versioned updater release
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $tag = "v$version"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host "Release already exists: $tag"; exit 0 }
+          $assets = @(Get-ChildItem -Path dist -File | Where-Object { $_.Extension -in @('.exe','.yml','.blockmap') })
+          if (-not ($assets.Name -match '^Baodroid-Setup-.*\.exe$')) { throw "Missing NSIS installer" }
+          if (-not ($assets.Name -contains 'latest.yml')) { throw "Missing latest.yml updater metadata" }
+          $paths = @($assets | ForEach-Object { $_.FullName })
+          gh release create $tag @paths --target main --title "Baodroid $tag" --notes "UX layout improvements, focus preview, device controls, VS Code connection fixes."
+          if ($LASTEXITCODE -ne 0) { throw "Release upload failed" }
