@@ -16,7 +16,7 @@
       <button class="top-action" id="btn-refresh">⟳ <span>Làm mới</span></button>
       <button class="top-action" id="btn-update">↓ <span>Kiểm tra bản vá</span></button>
       <button class="top-action small" id="btn-settings">⚙</button>
-      <span id="version" class="version">v0.2.0</span>
+      <span id="version" class="version">v0.3.0</span>
     </div>
   </header>
   <aside class="sidebar">
@@ -39,7 +39,7 @@
   <main class="workspace" id="dashboard">
     <div class="pageheading"><div><p class="eyebrow">WORKSPACE / OVERVIEW</p><h1>Trung tâm xem trước Android</h1><p class="subtitle">Ba máy ảo độc lập. Một dự án cho mỗi màn hình. Đồng bộ với VS Code qua thư mục local.</p></div><div class="heading-actions"><button class="btn secondary" id="btn-check-adb">Kiểm tra ADB</button><button class="btn primary" id="btn-add-project">＋ Thêm dự án</button></div></div>
     <section class="projects folded" id="projects">
-      <div class="section-heading"><div><h2>Quản lý dự án <span id="project-title-count" class="subcount">0 / 3</span></h2><p>Tối đa ba thư mục dự án Android Gradle hoặc Flutter.</p></div><button class="btn secondary" id="btn-toggle-projects" aria-expanded="false">▾ Hiện danh sách</button></div>
+      <div class="section-heading"><div><h2>Quản lý dự án <span id="project-title-count" class="subcount">0 / 3</span></h2><p>Tối đa ba dự án Android Gradle hoặc Flutter. Chọn dự án sẽ tự khởi chạy nếu có AVD.</p></div><button class="btn secondary" id="btn-toggle-projects" aria-expanded="false">▾ Hiện danh sách</button></div>
       <div class="project-list" id="project-list"></div>
     </section>
     <div class="main-grid">
@@ -53,7 +53,7 @@
           </div></div>
         <div class="preview-hint"><span class="dot green"></span> Ảnh thật qua ADB <span>•</span> <kbd>Esc</kbd> trở về chế độ 3 máy <span>•</span> Gập hai thanh bên để mở rộng preview</div>
         <div class="device-grid" id="device-grid"></div>
-        <div class="device-foot">ⓘ Cần Android SDK + Emulator + ít nhất một AVD đã tạo. Thời gian dựng APK/Flutter phụ thuộc dự án và cấu hình PC.</div>
+        <div class="device-foot">ⓘ Chọn dự án hoặc nhấn Kết nối VS Code trên từng máy; hệ thống tự ghép AVD còn trống và chạy. Cần Android SDK + ít nhất một AVD.</div>
       </section>
       <aside class="right-rail" id="right-rail">
         <section class="panel pipeline"><div class="section-heading compact"><h2>⚡ Build / Deploy / Sync</h2><button class="rail-close" id="btn-rail-close" title="Thu gọn bảng tác vụ" aria-label="Thu gọn bảng tác vụ">»</button></div>
@@ -73,7 +73,7 @@
       </aside>
     </div>
     <section class="panel logs" id="logs"><div class="section-heading compact"><div><h2>▤ Log & Trạng thái hệ thống</h2><p>Nhật ký build, ADB, emulator và đồng bộ dự án</p></div><div class="log-actions"><select id="log-filter"><option value="all">Tất cả</option><option value="error">Lỗi</option><option value="success">Thành công</option></select><button id="clear-logs" class="btn subtle">Xóa hiển thị</button></div></div><div class="log-output" id="log-output" aria-live="polite"></div></section>
-    <footer class="footer"><span>▣ Baodroid 0.2.0</span><span>Chỉ chạy local • Không tải mã nguồn dự án lên máy chủ</span><a href="https://github.com/techzoneadapter-droid/baodroid" id="repo-link">GitHub ↗</a></footer>
+    <footer class="footer"><span>▣ Baodroid 0.3.0</span><span>Chỉ chạy local • Không tải mã nguồn dự án lên máy chủ</span><a href="https://github.com/techzoneadapter-droid/baodroid" id="repo-link">GitHub ↗</a></footer>
   </main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

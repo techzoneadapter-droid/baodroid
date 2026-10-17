@@ -30,7 +30,7 @@ function toast(text,error=false){const node=$('toast');node.textContent=text;nod
 async function call(method,...args){try{const result=await api[method](...args);if(!result?.ok)throw new Error(result?.error || 'Yêu cầu không thành công');return result.data;}catch(e){toast(e.message,true);throw e;}}
 async function safeCall(method,...args){try{return await call(method,...args);}catch{return null;}}
 const projectFor=(id)=>state.config.projects.find(p=>p.id===id);
-function prettyStatus(s){return ({off:'Đã dừng',booting:'Đang mở',running:'Running',error:'Lỗi'})[s] || s;}
+function prettyStatus(s){return ({off:'Đã dừng',booting:'Đang mở',running:'Đang chạy',error:'Mất kết nối'})[s] || s;}
 function renderProjects(){
   const projects=state.config.projects,slots=state.config.slots;
   $('project-title-count').textContent=`${projects.length} / 3`;
@@ -62,21 +62,21 @@ function renderDevices(){
     const d=state.devices[i] || {status:'off',build:'idle',message:'Chưa khởi chạy'};
     const assigned=slots[i] || {};
     const selected=projectFor(assigned.projectId),active=d.status==='running',busy=d.status==='booting';
-    const locked=active||busy,hasAvd=avds.length>0;
+    const hasAvd=avds.length>0;
     const projectOptions=`<option value="">— Chọn dự án —</option>`+projects.map(p=>`<option value="${html(p.id)}" ${selected?.id===p.id?'selected':''} ${slots.some((s,j)=>j!==i&&s.projectId===p.id)?'disabled':''}>${html(p.name)}</option>`).join('');
     const avdOptions=`<option value="">${hasAvd?'— Chọn AVD —':'Chưa tìm thấy AVD'}</option>`+avds.map(x=>`<option value="${html(x)}" ${x===assigned.avd?'selected':''} ${slots.some((s,j)=>j!==i&&s.avd===x)?'disabled':''}>${html(x)}</option>`).join('');
     const statusColor=d.status==='running'?'green':d.status==='booting'?'orange':d.status==='error'?'red':'gray';
     const savedPreview=active?previews[i]:null;
     return `<article class="device-card ${active?'is-running':''} ${viewMode===String(i)?'is-focused':''}" data-device="${i}">
-      <div class="device-heading"><strong><span class="dot ${statusColor}"></span>Emulator ${i+1}</strong><span class="status-badge">${prettyStatus(d.status)}</span></div>
-      <select class="avd-select project-select" data-slot="${i}" ${locked?'disabled':''} aria-label="Dự án máy ${i+1}">${projectOptions}</select>
-      <select class="avd-select avd-assignment" data-slot="${i}" ${locked?'disabled':''} aria-label="Android AVD máy ${i+1}">${avdOptions}</select>
+      <div class="device-heading"><strong><span class="dot ${statusColor}"></span>Máy Android ${i+1}</strong><div class="device-heading-actions"><span class="status-badge">${prettyStatus(d.status)}</span><button class="vscode-connect" data-connect-vscode="${i}" title="Mở hoặc chọn thư mục dự án trong VS Code; Baodroid đồng bộ trực tiếp qua file trên máy">↗ Kết nối VS Code</button></div></div>
+      <select class="avd-select project-select" data-slot="${i}" aria-label="Dự án máy ${i+1}">${projectOptions}</select>
+      <select class="avd-select avd-assignment" data-slot="${i}" aria-label="Android AVD máy ${i+1}">${avdOptions}</select>
       <div class="phone-wrap"><div class="phone-shell ${zoomBySlot[i]==='100'?'':'zoom-'+zoomBySlot[i]} ${savedPreview?.width>savedPreview?.height?'landscape':''}"><div class="phone-screen" data-touch-slot="${i}">
-        ${savedPreview?`<img src="${savedPreview.image}" draggable="false" alt="Ảnh màn hình Android ${i+1}"/>`:`<div class="phone-placeholder"><div class="phone-symbol">▯</div><b>${busy?'Đang mở Android…':active?'Đang chờ ảnh…':'Chưa kết nối'}</b><small>${busy?'Đợi AVD hoàn tất khởi động':active?'ADB đang lấy ảnh màn hình':'Chọn dự án và AVD để bắt đầu'}</small></div>`}
+        ${savedPreview?`<img src="${savedPreview.image}" draggable="false" alt="Ảnh màn hình Android ${i+1}"/>`:`<div class="phone-placeholder"><div class="phone-symbol">▯</div><b>${busy?'Đang mở Android…':active?'Đang chờ ảnh…':selected?'Đang tự kết nối':'Chưa kết nối'}</b><small>${busy?'Đợi AVD hoàn tất khởi động':active?'ADB đang lấy ảnh màn hình':selected?'Đang tìm AVD khả dụng hoặc chờ Android SDK':'Bấm Kết nối VS Code để chọn dự án'}</small></div>`}
         <div class="camera"></div></div></div></div>
       <div class="device-message" title="${html(d.message)}">${html(d.message || '')}</div>
-      <div class="device-controls"><button class="btn ${active||busy?'stop':'primary'}" data-command="${active||busy?'stop':'start'}" data-slot="${i}" ${!locked&&(!selected||!assigned.avd)?'disabled':''}>${active||busy?'■ Dừng':'▶ Bắt đầu'}</button><button class="btn reload" data-command="reload" data-slot="${i}" ${!active?'disabled':''}>⟳ Tải lại</button></div>
       <div class="device-tools">
+        ${active||busy? `<button data-command="stop" data-slot="${i}" title="Dừng máy ảo và ứng dụng để giải phóng CPU/RAM">■ Dừng máy</button>`:''}
         <button data-device-action="home" data-slot="${i}" ${!active?'disabled':''} title="Màn hình Home Android">⌂ Home</button>
         <button data-device-action="back" data-slot="${i}" ${!active?'disabled':''} title="Quay lại trên Android">← Back</button>
         <button data-device-action="rotate" data-slot="${i}" ${!active?'disabled':''} title="Xoay màn hình Android">⟳ Xoay</button>
@@ -90,12 +90,16 @@ function renderDevices(){
   }).join('');
   changeView(viewMode);
   document.querySelectorAll('[data-zoom-slot]').forEach(el=>el.addEventListener('change',e=>{const slot=Number(e.currentTarget.dataset.zoomSlot);zoomBySlot[slot]=e.currentTarget.value;const shell=e.currentTarget.closest('.device-card').querySelector('.phone-shell');shell.classList.remove('zoom-75','zoom-125','zoom-150');if(zoomBySlot[slot]!=='100')shell.classList.add('zoom-'+zoomBySlot[slot]);}));
+  document.querySelectorAll('[data-connect-vscode]').forEach(el=>el.addEventListener('click',async e=>{
+    const slot=Number(e.currentTarget.dataset.connectVscode);
+    const result=await safeCall('connectVscode',slot);
+    if(result)toast('Đã liên kết với VS Code qua thư mục trên máy. Baodroid tự theo dõi thay đổi file.');
+  }));
   document.querySelectorAll('[data-device-action]').forEach(el=>el.addEventListener('click',async e=>{const slot=Number(e.currentTarget.dataset.slot),cmd=e.currentTarget.dataset.deviceAction;const result=await safeCall('deviceAction',slot,cmd);if(result&&cmd==='screenshot')toast('Đã lưu ảnh chụp: '+result);}));
   document.querySelectorAll('.project-select').forEach(el=>el.addEventListener('change',async e=>{await safeCall('assignProject',Number(e.target.dataset.slot),e.target.value||null);}));
   document.querySelectorAll('.avd-assignment').forEach(el=>el.addEventListener('change',async e=>{await safeCall('assignAvd',Number(e.target.dataset.slot),e.target.value);}));
-  document.querySelectorAll('[data-command]').forEach(el=>el.addEventListener('click',async e=>{
-    const slot=Number(e.currentTarget.dataset.slot),cmd=e.currentTarget.dataset.command;
-    await safeCall(cmd==='start'?'startSlot':cmd==='stop'?'stopSlot':'reloadSlot',slot);
+  document.querySelectorAll('[data-command="stop"]').forEach(el=>el.addEventListener('click',async e=>{
+    await safeCall('stopSlot',Number(e.currentTarget.dataset.slot));
   }));
   document.querySelectorAll('[data-touch-slot]').forEach(el=>{
     let down=null;
@@ -137,7 +141,7 @@ function bind(){
   $('btn-toggle-projects').addEventListener('click',()=>setLayout('projects',!layout.projects));
   document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>changeView(button.dataset.view)));
   window.addEventListener('keydown',e=>{if(e.key==='Escape'&&viewMode!=='all')changeView('all');});
-  $('btn-add-project').addEventListener('click',()=>void safeCall('addProject'));
+  $('btn-add-project').addEventListener('click',async()=>{const added=await safeCall('addProject');if(added)toast('Đã thêm dự án. Baodroid đang tự tìm AVD và khởi chạy.');});
   $('btn-refresh').addEventListener('click',()=>void refresh());
   $('btn-settings').addEventListener('click',()=>{setLayout('right',false);$('settings').scrollIntoView({behavior:'smooth',block:'center'});});
   $('btn-sdk').addEventListener('click',async()=>{const result=await safeCall('chooseSdk');if(result){toast('Đã cấu hình Android SDK');void refresh();}});

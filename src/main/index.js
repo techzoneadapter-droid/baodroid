@@ -30,6 +30,19 @@ function registerHandlers() {
   register('stop-slot', (slot) => engine.stopSlot(slot));
   register('reload-slot', (slot) => engine.reloadSlot(slot));
   register('open-vscode', (projectId) => engine.openVSCode(projectId));
+  register('connect-vscode', async slot => {
+    if (!Number.isInteger(slot) || slot<0 || slot>2) throw new Error('Máy ảo không hợp lệ.');
+    let projectId = engine.store.data.slots[slot].projectId;
+    if (!projectId) {
+      if (engine.store.data.projects.length >= 3) throw new Error('Đã đủ 3 dự án. Hãy chọn một dự án có sẵn ở menu máy ảo.');
+      const folder = await chooseFolder({title:'Chọn thư mục dự án trong VS Code cho Máy '+(slot+1)});
+      if (!folder) return null;
+      const project = await engine.addProject(folder,slot);
+      projectId = project.id;
+    }
+    await engine.openVSCode(projectId);
+    return {projectId,slot,transport:'local-filesystem'};
+  });
   register('tap', (slot,x,y) => engine.tap(slot,x,y));
   register('swipe', (slot,x1,y1,x2,y2,ms) => engine.swipe(slot,x1,y1,x2,y2,ms));
   register('check-adb', () => engine.checkAdb());
@@ -60,7 +73,7 @@ app.whenReady().then(async () => {
   });
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(__dirname,'../renderer/index.html'));
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => { win.show(); void engine.resumeAssignedSlots(); });
   win.webContents.setWindowOpenHandler(({url}) => { if (url.startsWith('https://github.com/techzoneadapter-droid/baodroid')) shell.openExternal(url); return {action:'deny'}; });
   engine.log('Baodroid sẵn sàng. Vui lòng chọn Android SDK, dự án và AVD.');
 });

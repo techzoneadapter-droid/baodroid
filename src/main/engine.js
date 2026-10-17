@@ -9,12 +9,16 @@ const {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand} = require
 const {findVSCode, openVSCodeFolder} = require('./vscode');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const isSlot = i => Number.isInteger(i) && i >= 0 && i <= 2;
+function chooseFreeAvd(names,slots,index) {
+  const used = new Set(slots.filter((_,i)=>i!==index).map(s=>s.avd).filter(Boolean));
+  return names.find(name=>!used.has(name)) || '';
+}
 
 class Engine {
   constructor(store, emit) {
     this.store = store; this.emit = emit;
     this.devices = Array.from({length:3}, (_,i) => ({slot:i,status:'off',serial:`emulator-${5554 + i*2}`,preview:null,build:'idle',message:'Chưa khởi chạy',lastSync:null}));
-    this.workers = Array.from({length:3}, () => ({emulator:null,runner:null,watcher:null,timer:null,debounce:null,generation:0,busy:false,dirty:false,manuallyDeploy:false,flutterReady:false}));
+    this.workers = Array.from({length:3}, () => ({emulator:null,runner:null,watcher:null,timer:null,debounce:null,monitorTimer:null,recoveryTimer:null,recoveryAttempts:0,autoLaunching:false,adbFailures:0,previewFailures:0,bootedAt:0,generation:0,busy:false,dirty:false,manuallyDeploy:false,flutterReady:false}));
     this.logs=[]; this.closed=false;
   }
   log(message, level='info', slot=null) {
@@ -30,16 +34,19 @@ class Engine {
   requireSlot(i) { if (!isSlot(i)) throw new Error('Máy ảo không hợp lệ.'); return i; }
   requireStopped(i) { if (this.devices[i].status !== 'off' && this.devices[i].status !== 'error') throw new Error('Dừng máy ảo trước khi thay đổi dự án hoặc thiết bị.'); }
   project(id) { const result = this.store.data.projects.find(p => p.id === id); if (!result) throw new Error('Không tìm thấy dự án.'); return result; }
-  addProject(folder) {
+  addProject(folder, preferredSlot=null) {
     if (this.store.data.projects.length >= 3) throw new Error('Giới hạn tối đa 3 dự án.');
     const normalized = path.resolve(folder);
     if (this.store.data.projects.some(p => p.path.toLowerCase() === normalized.toLowerCase())) throw new Error('Dự án đã được thêm.');
     const kind = detectProject(normalized);
     const project = {id:crypto.randomUUID(),name:path.basename(normalized),path:normalized,kind};
     this.store.data.projects.push(project);
-    const i = this.store.data.slots.findIndex(x => !x.projectId);
-    if (i !== -1) this.store.data.slots[i].projectId=project.id;
-    this.changed(); this.log(`Đã kết nối ${project.name} (${kind}).`); return project;
+    const i = isSlot(preferredSlot) ? preferredSlot : this.store.data.slots.findIndex(x => !x.projectId);
+    if (i !== -1 && !this.store.data.slots[i].projectId) this.store.data.slots[i].projectId=project.id;
+    this.changed();
+    this.log(`Đã gán ${project.name} vào máy ${i+1}. Tự kết nối qua thư mục local.`);
+    if (i!==-1) void this.autoStartSlot(i);
+    return project;
   }
   removeProject(id) {
     this.project(id);
@@ -48,18 +55,57 @@ class Engine {
     for (const s of this.store.data.slots) if (s.projectId===id) s.projectId=null;
     this.changed(); return true;
   }
-  assignProject(slot, projectId) {
-    this.requireSlot(slot); this.requireStopped(slot);
+  async assignProject(slot, projectId) {
+    this.requireSlot(slot);
     if (projectId) this.project(projectId);
     if (projectId && this.store.data.slots.some((s,i) => i!==slot && s.projectId===projectId)) throw new Error('Mỗi dự án chỉ được gán cho một máy ảo.');
+    if (this.devices[slot].status!=='off') await this.stopSlot(slot);
     this.store.data.slots[slot].projectId=projectId || null;
-    this.changed(); return true;
+    this.changed();
+    if (projectId) void this.autoStartSlot(slot);
+    return true;
   }
-  assignAvd(slot, avd) {
-    this.requireSlot(slot); this.requireStopped(slot);
+  async assignAvd(slot, avd) {
+    this.requireSlot(slot);
     if (typeof avd !== 'string' || avd.length > 120 || /[\r\n]/.test(avd)) throw new Error('Tên AVD không hợp lệ.');
     if (avd && this.store.data.slots.some((s,i) => i!==slot && s.avd===avd)) throw new Error('Một AVD không thể chạy đồng thời ở hai máy.');
-    this.store.data.slots[slot].avd=avd; this.changed(); return true;
+    if (this.devices[slot].status!=='off') await this.stopSlot(slot);
+    this.store.data.slots[slot].avd=avd;
+    this.changed();
+    if (this.store.data.slots[slot].projectId) void this.autoStartSlot(slot);
+    return true;
+  }
+  async autoStartSlot(slot) {
+    this.requireSlot(slot);
+    const worker=this.workers[slot];
+    if (worker.autoLaunching || !['off','error'].includes(this.devices[slot].status)) return false;
+    if (!this.store.data.slots[slot].projectId || this.closed) return false;
+    worker.autoLaunching=true;
+    try {
+      const assigned=this.store.data.slots[slot];
+      if (!assigned.avd) {
+        const avds=await this.listAvds();
+        const available=chooseFreeAvd(avds,this.store.data.slots,slot);
+        if (!available) {
+          this.update(slot,{status:'off',message:'Chưa có AVD còn trống. Tạo AVD trong Android Studio → Device Manager.'});
+          this.log('Không có AVD khả dụng. Tạo AVD trong Android Studio để tự chạy.','warn',slot);
+          return false;
+        }
+        assigned.avd=available;
+        this.changed();
+        this.log(`Tự chọn AVD ${available} cho máy ${slot+1}.`,'success',slot);
+      }
+      await this.startSlot(slot);
+      return true;
+    } catch(error) {
+      this.update(slot,{status:'off',message:'Chưa thể tự chạy: '+error.message});
+      this.log('Tự kết nối: '+error.message,'warn',slot);
+      return false;
+    } finally { worker.autoLaunching=false; }
+  }
+  async resumeAssignedSlots() {
+    if(this.closed)return;
+    await Promise.allSettled([0,1,2].map(i=>this.autoStartSlot(i)));
   }
   configure(payload) {
     if (!payload || typeof payload !== 'object') throw new Error('Cấu hình không hợp lệ.');
@@ -71,7 +117,9 @@ class Engine {
       settings.sdkPath=full;
     }
     if (Number.isInteger(payload.screenshotInterval)) settings.screenshotInterval=Math.min(5000,Math.max(1000,payload.screenshotInterval));
-    this.changed(); return settings;
+    this.changed();
+    if(typeof payload.sdkPath==='string') void this.resumeAssignedSlots();
+    return settings;
   }
   tools() {
     const root=sdkRoot(this.store.data.settings.sdkPath);
@@ -156,12 +204,40 @@ class Engine {
     }
     if (!ready) throw new Error('Hết thời gian chờ Android khởi động (180 giây). Kiểm tra tăng tốc phần cứng/AVD.');
     if (this.workers[slot].generation!==generation) return;
-    this.update(slot,{status:'running',message:'Android đã sẵn sàng'});
+    this.workers[slot].bootedAt=Date.now();
+    this.workers[slot].adbFailures=0;
+    this.workers[slot].previewFailures=0;
+    this.update(slot,{status:'running',message:'Android đã sẵn sàng, ứng dụng đang tự đồng bộ'});
     this.log('AVD đã khởi động. Bắt đầu đồng bộ ứng dụng.','success',slot);
     this.watch(slot,project);
+    this.monitorDevice(slot,generation);
     this.captureLoop(slot,generation);
     if (project.kind==='flutter') this.startFlutter(slot,project,generation);
     else this.queueBuild(slot,true);
+  }
+  monitorDevice(slot,generation) {
+    const worker=this.workers[slot];
+    const check=async()=>{
+      if(this.closed || worker.generation!==generation || this.devices[slot].status!=='running')return;
+      try {
+        const state=await this.adb(slot,['get-state'],6500);
+        if(state.stdout.trim()!=='device') throw new Error('Thiết bị chưa online.');
+        if(worker.adbFailures>0)this.log('ADB đã tự kết nối lại.','success',slot);
+        worker.adbFailures=0;
+        if(Date.now()-worker.bootedAt>60000)worker.recoveryAttempts=0;
+      } catch(error) {
+        worker.adbFailures++;
+        this.log(`ADB tạm gián đoạn (${worker.adbFailures}/3): ${error.message}`,'warn',slot);
+        try {await exec(this.tools().adb,['start-server'],{timeout:6500});}catch{/* retry next health check */}
+        if(worker.adbFailures>=3) {
+          this.fail(slot,new Error('ADB mất kết nối nhiều lần. Đang thử tự khởi động lại emulator.'));
+          return;
+        }
+      }
+      if(worker.generation===generation && this.devices[slot].status==='running')
+        worker.monitorTimer=setTimeout(check,worker.adbFailures?3500:9000);
+    };
+    void check();
   }
   watch(slot, project) {
     const worker=this.workers[slot];
@@ -272,8 +348,19 @@ class Engine {
   failBuild(slot,error) { this.update(slot,{build:'error',message:error.message}); this.log(error.message,'error',slot); }
   fail(slot,error) {
     this.log(error.message,'error',slot);
-    this.update(slot,{status:'error',build:'error',message:error.message});
     this.clearWorker(slot);
+    const worker=this.workers[slot];
+    const assigned=this.store.data.slots[slot];
+    const shouldRetry=!this.closed && !!assigned.projectId && !!assigned.avd && worker.recoveryAttempts<3;
+    this.update(slot,{status:'error',build:'error',message:shouldRetry?'Mất kết nối. Baodroid đang tự kết nối lại…':error.message});
+    if(!shouldRetry)return;
+    const delays=[3000,8000,20000];
+    const delay=delays[worker.recoveryAttempts++];
+    this.log(`Sẽ tự thử lại lần ${worker.recoveryAttempts}/3 sau ${Math.round(delay/1000)} giây.`,'warn',slot);
+    worker.recoveryTimer=setTimeout(()=>{
+      worker.recoveryTimer=null;
+      void this.autoStartSlot(slot);
+    },delay);
   }
   async reloadSlot(slot) {
     this.requireSlot(slot);
@@ -301,7 +388,13 @@ class Engine {
     const worker=this.workers[slot];
     const run=async()=>{
       if (worker.generation!==generation || this.devices[slot].status!=='running') return;
-      if (this.store.data.settings.screenshots) await this.capture(slot).catch(()=>{});
+      if (this.store.data.settings.screenshots) {
+        try {await this.capture(slot);worker.previewFailures=0;}
+        catch(error) {
+          worker.previewFailures++;
+          if(worker.previewFailures===3)this.log('Ảnh xem trước bị gián đoạn, đang kiểm tra lại ADB: '+error.message,'warn',slot);
+        }
+      }
       if (worker.generation===generation && this.devices[slot].status==='running') worker.timer=setTimeout(run,this.store.data.settings.screenshotInterval);
     };
     void run();
@@ -329,16 +422,19 @@ class Engine {
   clearWorker(slot) {
     const worker=this.workers[slot]; worker.generation++;
     clearTimeout(worker.timer); clearTimeout(worker.debounce);
+    clearTimeout(worker.monitorTimer); clearTimeout(worker.recoveryTimer);
+    worker.monitorTimer=null;worker.recoveryTimer=null;
     if(worker.watcher){void worker.watcher.close();worker.watcher=null;}
     if(worker.runner){stopProcess(worker.runner);worker.runner=null;}
     if(worker.emulator){stopProcess(worker.emulator);worker.emulator=null;}
-    worker.dirty=false;worker.busy=false;worker.flutterReady=false;
+    worker.dirty=false;worker.busy=false;worker.flutterReady=false;worker.adbFailures=0;worker.previewFailures=0;
   }
   async stopSlot(slot) {
     this.requireSlot(slot);
     const previous=this.devices[slot].status;
     this.clearWorker(slot);
-    this.update(slot,{status:'off',build:'idle',message:'Đã dừng',lastSync:null,rotation:0,screenHeight:undefined,screenWidth:undefined});
+    this.workers[slot].recoveryAttempts=0;
+    this.update(slot,{status:'off',build:'idle',message:'Đã dừng thủ công',lastSync:null,rotation:0,screenHeight:undefined,screenWidth:undefined});
     if(previous!=='off') {
       try {await this.adb(slot,['emu','kill'],3500);}catch{/* Emulator already stopped */}
       this.log('Đã dừng emulator.','info',slot);
@@ -358,4 +454,4 @@ class Engine {
     }
   }
 }
-module.exports={Engine};
+module.exports={Engine,chooseFreeAvd};

@@ -1,7 +1,7 @@
 {
   "name": "baodroid",
   "productName": "Baodroid",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Local Windows Android preview hub for VS Code projects",
   "author": "Baodroid Contributors",
   "license": "MIT",

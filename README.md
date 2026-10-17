@@ -80,3 +80,13 @@ src/renderer/         HTML/CSS/JS giao diện, điều khiển Android
 **Lưu ý riêng tư:** Mã nguồn dự án Android vẫn ở đúng thư mục mà bạn lựa chọn; Baodroid đọc file và chạy công cụ cục bộ. Cấu hình nằm trong thư mục dữ liệu ứng dụng của Windows, không phải dự án GitHub.
 
 Bản 0.2.0 là **MVP**. Chưa kiểm thử end-to-end trên Windows với Android SDK/AVD thực trong môi trường xây dựng này; cần kiểm tra thực tế trên PC Windows trước khi coi là bản phát hành ổn định.
+
+
+## Baodroid v0.3.0 — Chạy tự động & kết nối VS Code
+
+- Nhấn **Kết nối VS Code** trên từng máy. Nếu chưa gán dự án, chọn thư mục Android Gradle/Flutter trên ổ đĩa; nếu đã gán, VS Code mở trực tiếp thư mục đó.
+- File watcher giám sát thư mục nguồn ngay trên Windows (không mở cổng mạng, không phải cài extension VS Code). Sau khi chọn dự án, phần mềm tự tìm AVD còn trống, khởi động Android và triển khai ứng dụng.
+- Tùy chọn chọn dự án và AVD vẫn hiện trong mỗi thẻ máy để đổi thủ công khi cần. Thay đổi dự án khi đang chạy sẽ dừng máy hiện tại và tự khởi chạy dự án vừa chọn.
+- Baodroid kiểm tra kết nối ADB định kỳ và khôi phục có giới hạn nếu emulator ngừng hoạt động. Nếu Android SDK hoặc AVD chưa được cài, ứng dụng sẽ báo rõ điều kiện thiếu; không thể tự tạo AVD ngoài SDK.
+- Giao diện sửa lỗi chữ menu bên trái bị cuốn xuống thành cột, bổ sung nút kết nối VS Code riêng và bỏ nút Bắt đầu/Tải lại. Vẫn có nút Dừng máy để chủ động giải phóng CPU/RAM.
+- Các yêu cầu về cập nhật dưới 0,5 giây chỉ áp dụng cho phát hiện thay đổi file; thời gian build Android/Gradle không thể bảo đảm dưới 0,5 giây.

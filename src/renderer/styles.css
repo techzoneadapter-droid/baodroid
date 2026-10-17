@@ -61,3 +61,24 @@
 
 .phone-shell.landscape{aspect-ratio:19.1 / 9;max-width:100%;width:min(100%,380px);height:auto}
 .device-grid.focused .phone-shell.landscape{width:min(100%,660px);max-width:660px}
+
+/* Baodroid v0.3.0: correct Windows menu typography at all display scaling factors */
+:root{font-family:'Segoe UI',Tahoma,Arial,sans-serif;font-synthesis:none}
+.nav{min-width:0;white-space:nowrap;gap:12px;line-height:1.2}
+.nav>span:first-child{flex:0 0 22px;width:22px;min-width:22px;font-family:'Segoe UI Symbol','Segoe UI',sans-serif}
+.nav>.nav-label{flex:1 1 auto;min-width:0;width:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left;font-size:12px;color:inherit}
+.nav em{flex:0 0 auto;margin-left:auto}
+.shell.left-collapsed .nav>.nav-label{display:none}
+.shell.left-collapsed .nav>span:first-child{flex:0 0 24px;width:24px}
+.sidebar{overflow:hidden}
+.device-heading{flex-wrap:wrap;align-items:center;gap:8px}
+.device-heading-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end;min-width:0}
+.vscode-connect{background:#124c78;border:1px solid #2781b5;border-radius:7px;color:#dcf2ff;cursor:pointer;font-size:11px;font-weight:700;line-height:1.2;padding:7px 9px;white-space:nowrap}
+.vscode-connect:hover,.vscode-connect:focus-visible{background:#126e9b;border-color:#62baff}
+.device-card{min-width:0}
+.device-card select{font-family:'Segoe UI',Tahoma,Arial,sans-serif}
+.device-tools{margin-top:6px}
+.device-grid.focused .device-card.is-focused{grid-template-rows:auto auto auto 1fr auto}
+.device-grid.focused .device-tools{grid-column:1}
+.device-grid.focused .phone-wrap{grid-row:2/6}
+@media(max-width:1250px){.device-heading-actions{width:100%;justify-content:space-between}.nav>.nav-label{font-size:11px}.sidebar{padding-left:8px;padding-right:8px}}

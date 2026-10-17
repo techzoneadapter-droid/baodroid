@@ -7,12 +7,18 @@ const {spawn} = require('node:child_process');
 // through a command shell. The CLI 'code' command need not be in PATH.
 function vscodeCandidates(env = process.env, platform = process.platform) {
   if (platform !== 'win32') return ['code'];
-  const roots = [env.LOCALAPPDATA && path.join(env.LOCALAPPDATA,'Programs'), env.ProgramFiles,env['ProgramFiles(x86)']].filter(Boolean);
+  const roots = [env.LOCALAPPDATA && path.join(env.LOCALAPPDATA,'Programs'), env.ProgramFiles, env.ProgramW6432, env['ProgramFiles(x86)']].filter(Boolean);
   const results=[];
   for (const root of roots) for (const name of ['Microsoft VS Code','Microsoft VS Code Insiders']) {
     results.push(path.join(root,name,name.endsWith('Insiders')?'Code - Insiders.exe':'Code.exe'));
   }
-  return results;
+  if(env.VSCODE_PATH)results.unshift(env.VSCODE_PATH);
+  // VS Code portable builds can be reached through the existing Windows PATH.
+  for(const folder of (env.Path || env.PATH || '').split(path.delimiter).filter(Boolean)){
+    results.push(path.join(folder,'Code.exe'));
+    results.push(path.join(folder,'code.exe'));
+  }
+  return [...new Set(results)];
 }
 function findVSCode(env=process.env,platform=process.platform) {
   return vscodeCandidates(env,platform).find(file=>platform==='win32' ? fs.existsSync(file):true) || null;
