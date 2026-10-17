@@ -4,11 +4,12 @@
 (() => {
  const api=window.baodroid;
  const escapeHTML=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
- const models=['gpt-5.1-codex','gpt-5.1','gpt-5-mini','gpt-4.1'];
- const data=Array.from({length:3},()=>({model:'gpt-5.1-codex',messages:[],changes:[],busy:false,connected:false,authenticated:false,installed:null,canUndo:false}));
+ const models=['auto','gpt-5.1-codex','gpt-5.1','gpt-5-mini','gpt-4.1'];
+ const data=Array.from({length:3},()=>({model:'auto',messages:[],changes:[],busy:false,connected:false,authenticated:false,installed:null,canUndo:false}));
  const drafts=['','',''];
  const notes=['','',''];
  const diffs=['','',''];
+ const deviceCodes=[null,null,null];
  let checked=false;
  async function call(name,...args){
    try{
@@ -35,8 +36,11 @@
    panel.innerHTML=
      '<div class="ai-head"><div><strong>✦ AI viết code</strong><small>Chỉ sửa dự án của máy '+(i+1)+'</small></div>'+
      '<button type="button" class="button ai-connect" data-ai-connect="'+i+'">Kết nối ChatGPT</button></div>'+
+     '<div class="ai-login-actions"><button type="button" class="button quiet" data-ai-install="'+i+'">Cài Codex CLI</button>'+
+     '<button type="button" class="button quiet" data-ai-device="'+i+'">Đăng nhập bằng mã</button></div>'+
+     '<div class="ai-device-code" data-ai-code="'+i+'" hidden></div>'+
      '<div class="ai-model-row"><label for="ai-model-'+i+'">Model</label>'+
-     '<select class="ai-model" id="ai-model-'+i+'">'+models.map(m=>'<option value="'+m+'">'+m+'</option>').join('')+'</select>'+
+     '<select class="ai-model" id="ai-model-'+i+'">'+models.map(m=>'<option value="'+m+'">'+(m==='auto'?'Tự động (khuyên dùng)':m)+'</option>').join('')+'</select>'+
      '<span class="ai-indicator" data-ai-indicator="'+i+'">Chưa kết nối</span></div>'+
      '<div class="ai-history" data-ai-history="'+i+'" aria-live="polite"></div>'+
      '<div class="ai-revisions" data-ai-revisions="'+i+'" hidden></div>'+
@@ -53,7 +57,12 @@
    const text=panel.querySelector('textarea');
    text.value=drafts[i];
    text.addEventListener('input',()=>{drafts[i]=text.value;});
-   panel.querySelector('[data-ai-connect]').addEventListener('click',()=>void connect(i));
+   panel.querySelector('[data-ai-connect]').addEventListener('click',()=>void connect(i,'browser'));
+   panel.querySelector('[data-ai-device]').addEventListener('click',()=>void connect(i,'device'));
+   panel.querySelector('[data-ai-install]').addEventListener('click',()=>void installCodex(i));
+   panel.querySelector('[data-ai-code]').addEventListener('click',event=>{
+     if(event.target.closest('button'))void api.aiOpenAuth();
+   });
    panel.querySelector('[data-ai-stop]').addEventListener('click',()=>void stop(i));
    panel.querySelector('[data-ai-undo]').addEventListener('click',()=>void undo(i));
    panel.querySelector('[data-ai-preview]').addEventListener('click',()=>void showChanges(i));
@@ -86,14 +95,23 @@
    const session=data[i];
    const ready=Boolean(currentProject(i));
    const auth=session.connected&&session.authenticated;
-   const status=session.busy?'Đang sửa code…':auth?'Đã kết nối':session.installed===false?'Cần cài Codex CLI':'Chưa kết nối';
+   const status=session.busy?'Đang sửa code…':auth?'Đã kết nối':session.installing?'Đang cài CLI…':session.loginPending?'Đang đăng nhập…':session.installed===false?'Cần cài Codex CLI':'Chưa kết nối';
    panel.querySelector('.ai-indicator').textContent=status;
    panel.querySelector('.ai-indicator').classList.toggle('online',auth);
    panel.querySelector('.ai-send').disabled=!ready||!auth||session.busy;
    panel.querySelector('[data-ai-stop]').disabled=!session.busy;
    panel.querySelector('[data-ai-undo]').disabled=!ready||!session.canUndo||session.busy;
    panel.querySelector('[data-ai-preview]').disabled=!ready||!session.canUndo||session.busy;
-   panel.querySelector('.ai-connect').disabled=!ready||session.busy;
+   panel.querySelector('.ai-connect').disabled=!ready||session.busy||session.installing;
+   panel.querySelector('[data-ai-device]').disabled=!ready||session.busy||session.installing;
+   panel.querySelector('[data-ai-install]').hidden=session.installed!==false && !session.installing;
+   panel.querySelector('[data-ai-install]').disabled=!ready||session.busy||session.installing;
+   const codeInfo=deviceCodes[i];
+   const codeBox=panel.querySelector('[data-ai-code]');
+   codeBox.hidden=!codeInfo||auth;
+   if(codeInfo&&!auth){
+     codeBox.innerHTML='<span>Nhập mã thiết bị trên trang xác thực:</span><strong>'+escapeHTML(codeInfo.code)+'</strong><button class="button quiet" type="button">Mở trang đăng nhập</button>';
+   }
    const top=document.querySelector('[data-ai-top="'+i+'"]');
    if(top){top.disabled=!ready;top.textContent=auth?'✦ ChatGPT ✓':'✦ Kết nối ChatGPT';}
    panel.querySelector('.ai-model').disabled=session.busy;
@@ -120,25 +138,33 @@
      update(i);
    }
  }
- async function connect(i){
+ async function connect(i,mode='browser'){
    if(!currentProject(i)){alertAI('Hãy chọn một dự án cho máy Android '+(i+1)+' trước khi kết nối AI.');return;}
    notes[i]='Đang kiểm tra Codex CLI / đăng nhập ChatGPT…';
    update(i);
-   const result=await call('aiConnect',i);
+   const result=await call('aiConnect',i,mode);
    if(result){
      data[i]={...data[i],...result,model:data[i].model};
-     if(result.installed===false)notes[i]='Cài Codex CLI một lần: npm install -g @openai/codex';
-     else notes[i]=result.authenticated?'Đã kết nối ChatGPT.':'Trình duyệt sẽ mở để đăng nhập ChatGPT. Sau khi đăng nhập, quay lại Baodroid.';
+     if(result.installed===false)notes[i]='Chưa có Codex CLI. Hãy bấm Cài Codex CLI để cài đặt một lần trên Windows.';
+     else notes[i]=result.authenticated?'Đã kết nối ChatGPT.':mode==='device'?'Hãy đợi mã đăng nhập và mở trang xác thực.':'Trình duyệt sẽ mở để đăng nhập ChatGPT. Sau khi đăng nhập, quay lại Baodroid.';
    }else{
      notes[i]='Nếu thiếu Codex CLI: mở Windows Terminal và chạy npm install -g @openai/codex, sau đó thử lại.';
    }
+   update(i);
+ }
+ async function installCodex(i){
+   if(!confirm('Cài Codex CLI chính thức qua npm trên Windows? Đây là thay đổi công cụ toàn hệ thống của người dùng và cần kết nối Internet.'))return;
+   notes[i]='Đang cài đặt Codex CLI…';
+   update(i);
+   const result=await call('aiInstallCli',i);
+   if(result)data[i]={...data[i],...result,model:data[i].model};
    update(i);
  }
  async function send(i){
    const input=document.querySelector('[data-ai-input="'+i+'"]');
    const prompt=(input?.value||drafts[i]).trim();
    if(!prompt)return;
-   if(!data[i].connected){await connect(i);if(!data[i].authenticated)return;}
+   if(!data[i].connected){await connect(i,'browser');if(!data[i].authenticated)return;}
    notes[i]='AI đang đọc và chỉnh sửa file dự án…';
    const result=await call('aiSend',i,prompt,data[i].model);
    if(result){
@@ -174,8 +200,20 @@
      data[i]={...data[i],...event.state,model:data[i].model};
      notes[i]='Codex đang thực hiện yêu cầu…';
    }else if(event.type==='connected'){
-     data[i].connected=true;data[i].authenticated=true;notes[i]=event.message;
+     data[i].connected=true;data[i].authenticated=true;data[i].installed=true;
+     deviceCodes[i]=null;
+     notes[i]=event.message;
+   }else if(event.type==='missing-cli'){
+     data[i].installed=false;
+     notes[i]=event.message;
+   }else if(event.type==='device-code'){
+     deviceCodes[i]={code:event.code,url:event.url};
+     notes[i]=event.message;
+   }else if(event.type==='installed'){
+     data[i].installed=true;data[i].installing=false;
+     notes[i]=event.message;
    }else if(event.type==='error'){
+     data[i].installing=false;
      notes[i]=event.message;
    }else if(event.type==='info')notes[i]=event.message;
    else if(event.type==='done'){

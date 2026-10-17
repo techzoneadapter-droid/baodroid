@@ -1,4 +1,4 @@
-# Baodroid v0.6.0 — Preview mobile từ thư mục dự án trên Windows
+# Baodroid v0.7.0 — Preview lớn và kết nối ChatGPT dễ hơn
 
 Baodroid cho phép xem trước tối đa **3 dự án** từ thư mục được chọn trên máy tính. Không cần điện thoại USB và **không bắt buộc Android SDK cho dự án web**.
 
@@ -44,3 +44,19 @@ npm start
 ```
 
 CI GitHub Actions trên Windows tạo Setup NSIS + `latest.yml` để nút **Kiểm tra bản vá** nhận phiên bản mới.
+
+
+## Nâng cấp v0.7.0
+
+- Xem 3 máy hoặc chọn riêng một máy. Khi có dự án web, Baodroid tự ưu tiên màn hình đầu tiên để xem lớn. Bấm **Xem lớn** trên từng thẻ để phóng to và có thể quay lại bố cục 3 máy. Vùng preview rộng hơn.
+- Không còn tải lại iframe Vite/Expo khi Baodroid gửi thông báo trạng thái nhưng địa chỉ và trạng thái preview không đổi. Nhờ vậy ô nhập/chat và trạng thái trang web ít bị gián đoạn hơn.
+- Vite/Expo hiện rõ nhãn **Web mobile ≠ Android native**. Web preview chỉ mô phỏng viewport điện thoại; muốn chạy APK và API hệ điều hành Android thật vẫn cần Android SDK + AVD.
+- **Kết nối ChatGPT** giờ dò tìm Codex CLI ở thư mục npm của Windows, hiển thị nút **Cài Codex CLI** nếu chưa cài. Quá trình cài dùng npm toàn cục và chỉ được chạy khi bạn xác nhận.
+- Hai lựa chọn đăng nhập: đăng nhập ChatGPT qua trình duyệt bằng lệnh Codex chính thức, hoặc **Đăng nhập bằng mã** (device authentication). Dùng account ChatGPT chung nhưng 3 lịch sử AI và 3 workspace vẫn độc lập.
+- Model mặc định **Tự động (Codex CLI chọn)** để tránh phải chọn các model không khả dụng đối với tài khoản. Các lựa chọn khác tùy khả năng Codex CLI và quyền truy cập.
+- Khi đăng nhập bằng mã, mã hiển thị trong Baodroid. Không chia sẻ mã, mật khẩu hay cookie. Baodroid không thu thập thông tin đăng nhập ChatGPT.
+- Nếu CLI đã được cài nhưng Baodroid vẫn không tìm thấy, hãy kiểm tra phiên bản Node.js/npm trong Windows Terminal và khởi động lại Baodroid.
+
+### Giới hạn bảo mật
+
+Codex vẫn là công cụ có quyền sửa file nguồn. Baodroid dùng sandbox workspace-write, tạo điểm hoàn tác trước khi sửa và kiểm tra xung đột trước khi khôi phục. Mức cô lập file còn phụ thuộc vào khả năng sandbox trên Windows và cấu hình Codex. Hãy commit Git trước khi chạy tác vụ sửa mã quan trọng.

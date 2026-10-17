@@ -40,7 +40,9 @@ function registerHandlers() {
   register('reload-slot', (slot) => engine.reloadSlot(slot));
   register('open-vscode', (projectId) => engine.openVSCode(projectId));
   register('ai-status', async slot => { await ai.checkAuth(); return ai.state(slot); });
-  register('ai-connect', slot => ai.connect(slot));
+  register('ai-connect', (slot,mode) => ai.connect(slot,mode));
+  register('ai-install-cli', slot => ai.installCLI(slot));
+  register('ai-open-auth', () => shell.openExternal('https://auth.openai.com/codex/device'));
   register('ai-send', (slot,prompt,model) => ai.send(slot,prompt,model));
   register('ai-stop', slot => ai.stop(slot));
   register('ai-undo', slot => ai.undo(slot));

@@ -6,6 +6,8 @@ let state={config:{projects:[],slots:[{},{},{}],settings:{}},devices:[],logs:[]}
 let previewBySlot={};
 let avds=[];
 let view='all';
+let pinnedView=false;
+const renderedKeys=['','',''];
 let logs=[];
 let updateState=null;
 let toastTimeout=null;
@@ -45,9 +47,12 @@ function cardHTML(i){
  const title=project?'Mở thư mục trong VS Code':'Chọn thư mục dự án';
  const placeholder=booting?'Đang mở ứng dụng…':active?'Đang nhận ảnh màn hình…':
    project?'Sẵn sàng kết nối preview':'Chưa chọn dự án';
- const hint=project?(device.message||'Baodroid sẽ tự khởi chạy ứng dụng.'):'Bấm Kết nối VS Code và chọn thư mục dự án.';
+ const hint=project?(device.message||'Baodroid tự chạy ứng dụng.'):'Bấm Chọn thư mục dự án để bắt đầu.';
  return '<article class="device-card '+(active?'running':'')+(view===String(i)?' chosen':'')+'" data-device="'+i+'">'+
-  '<div class="device-head"><span class="device-title"><span class="state-dot '+escapeHTML(device.status||'off')+'"></span>Preview '+(i+1)+'</span><span class="status-label">'+(isWeb?'Web mobile · ':'Android · ')+escapeHTML(statusText(device.status))+'</span></div>'+
+  '<div class="device-head"><span class="device-title"><span class="state-dot '+escapeHTML(device.status||'off')+'"></span>Preview '+(i+1)+'</span>'+
+  '<div class="device-heading-actions"><span class="status-label">'+(isWeb?'Web mobile · ':'Android ảo · ')+escapeHTML(statusText(device.status))+'</span>'+
+  (isWeb?'<span class="preview-note">Web ≠ Android native</span>':'')+
+  (project?'<button class="button focus-button" data-focus-slot="'+i+'" title="Phóng lớn màn hình này">⛶ Xem lớn</button>':'')+'</div></div>'+
   '<select class="project-select" data-project-slot="'+i+'" aria-label="Dự án của máy Android '+(i+1)+'">'+options+'</select>'+
   '<div class="project-actions"><button class="button connect" data-code-slot="'+i+'" title="Chọn thư mục dự án cục bộ hoặc mở trong VS Code">↗ '+title+'</button>'+
   '<button class="button remove" data-remove-slot="'+i+'"'+(!project?' disabled':'')+' aria-label="Gỡ dự án khỏi Baodroid" title="Gỡ dự án này khỏi Baodroid, không xóa mã nguồn">✕</button></div>'+
@@ -64,7 +69,29 @@ function cardHTML(i){
 function render(){
  $('project-count').textContent=state.config.projects.length+' / 3 dự án';
  $('btn-add-project').disabled=state.config.projects.length>=3;
- $('device-grid').innerHTML=[0,1,2].map(cardHTML).join('');
+ const grid=$('device-grid');
+ for(let i=0;i<3;i++){
+   const slot=state.config.slots[i]||{};
+   const device=state.devices[i]||{};
+   const key=[slot.projectId||'',device.status||'off',device.previewMode||'',device.webUrl||''].join('|');
+   const current=grid.querySelector('[data-device="'+i+'"]');
+   if(!current||renderedKeys[i]!==key){
+     const holder=document.createElement('div');holder.innerHTML=cardHTML(i);
+     const newCard=holder.firstElementChild;
+     if(current)current.replaceWith(newCard);
+     else grid.append(newCard);
+     renderedKeys[i]=key;
+   } else{
+     const details=current.querySelector('.device-details .message');
+     const build=current.querySelector('.device-details .build');
+     if(details)details.textContent=device.message||'';
+     if(build)build.textContent=buildText(device.build);
+   }
+ }
+ if(!pinnedView&&view==='all'&&state.config.projects.some(p=>webKind(p.kind))){
+   const active=state.config.slots.findIndex(s=>s.projectId);
+   if(active>=0){view=String(active);pinnedView=true;}
+ }
  setView(view);
  wireCards();
 }
@@ -79,33 +106,43 @@ function setView(next){
  });
 }
 function wireCards(){
- document.querySelectorAll('[data-project-slot]').forEach(el=>el.addEventListener('change',async event=>{
+ document.querySelectorAll('[data-focus-slot]').forEach(el=>{
+   if(el.dataset.focusReady)return;
+   el.dataset.focusReady='1';
+   el.addEventListener('click',()=>{pinnedView=true;setView(String(el.dataset.focusSlot));});
+ });
+ document.querySelectorAll('[data-project-slot]').forEach(el=>{
+   if(el.dataset.bound)return;
+   el.dataset.bound='1';
+   el.addEventListener('change',async event=>{
    const i=slotId(event.currentTarget.dataset.projectSlot);
    await invoke('assignProject',i,event.currentTarget.value||null);
- }));
- document.querySelectorAll('[data-code-slot]').forEach(el=>el.addEventListener('click',async event=>{
+ });});
+ document.querySelectorAll('[data-code-slot]').forEach(el=>{if(el.dataset.bound)return;el.dataset.bound='1';el.addEventListener('click',async event=>{
    const i=slotId(event.currentTarget.dataset.codeSlot);
    const selected=getProject(state.config.slots[i]?.projectId);
    const linked=await invoke('connectVscode',i);
    if(linked)notify(linked.vscodeOpened?'Đã mở thư mục trong VS Code. Baodroid đang đồng bộ cục bộ.':'Đã liên kết thư mục. Baodroid tự chạy preview; bạn có thể tiếp tục sửa code trong VS Code.');
- }));
- document.querySelectorAll('[data-install-slot]').forEach(el=>el.addEventListener('click',async event=>{
+ });});
+ document.querySelectorAll('[data-install-slot]').forEach(el=>{if(el.dataset.bound)return;el.dataset.bound='1';el.addEventListener('click',async event=>{
    const i=slotId(event.currentTarget.dataset.installSlot);
    const project=getProject(state.config.slots[i]?.projectId);
    if(!project)return;
    if(!confirm('Cho phép cài dependencies của dự án '+project.name+' bằng npm install? npm có thể chạy các script được khai báo trong package.json.'))return;
    const result=await invoke('installWebDeps',i);
    if(result)notify('Đang cài thư viện. Sau khi xong, preview sẽ tự chạy.');
- }));
- document.querySelectorAll('[data-remove-slot]').forEach(el=>el.addEventListener('click',async event=>{
+ });});
+ document.querySelectorAll('[data-remove-slot]').forEach(el=>{if(el.dataset.bound)return;el.dataset.bound='1';el.addEventListener('click',async event=>{
    const i=slotId(event.currentTarget.dataset.removeSlot);
    const project=getProject(state.config.slots[i]?.projectId);
    if(!project || !confirm('Gỡ '+project.name+' khỏi Baodroid? Mã nguồn trên máy của bạn không bị xóa.'))return;
    // Stop the local emulator before removing its source project.
    if(['running','booting'].includes(state.devices[i]?.status))await invoke('stopSlot',i);
    await invoke('removeProject',project.id);
- }));
+ });});
  document.querySelectorAll('[data-touch-slot]').forEach(node=>{
+   if(node.dataset.bound)return;node.dataset.bound='1';
+   if(node.querySelector('.web-frame'))return;
    let down=null;
    const point=ev=>{
      const picture=previewBySlot[node.dataset.touchSlot];
@@ -187,7 +224,7 @@ function bind(){
  $('btn-update').addEventListener('click',()=>void invoke('checkUpdate'));
  $('update-dismiss').addEventListener('click',()=>$('update-popup').hidden=true);
  $('update-action').addEventListener('click',()=>void invoke(updateState?.state==='ready'?'installUpdate':'downloadUpdate'));
- document.querySelectorAll('[data-view]').forEach(btn=>btn.addEventListener('click',()=>setView(btn.dataset.view)));
+ document.querySelectorAll('[data-view]').forEach(btn=>btn.addEventListener('click',()=>{pinnedView=true;setView(btn.dataset.view);}));
  window.addEventListener('keydown',ev=>{if(ev.key==='Escape')setView('all');});
  api.onState(next=>{state=next;render();updateEnvironment();});
  api.onPreview(p=>{

@@ -3,8 +3,9 @@ const fs=require('node:fs');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const {spawn}=require('node:child_process');
+const {resolveCommand,launchOptions}=require('./codex-tools');
 
-const ALLOWED_MODELS=['gpt-5.1-codex','gpt-5.1','gpt-5-mini','gpt-4.1'];
+const ALLOWED_MODELS=['auto','gpt-5.1-codex','gpt-5.1','gpt-5-mini','gpt-4.1'];
 const IGNORE_DIRS=new Set(['.git','node_modules','.gradle','.dart_tool','.idea','.expo','.next','Pods','build','dist','out','coverage','.baodroid','vendor']);
 const ALLOWED_EXT=new Set(['.js','.jsx','.ts','.tsx','.dart','.kt','.java','.xml','.gradle','.json','.yaml','.yml','.css','.scss','.sass','.html','.md','.properties','.txt','.swift','.m','.mm','.h','.c','.cpp','.kts']);
 const FILE_CAP=750000;
@@ -68,8 +69,7 @@ function restoreSources(root,before,changes) {
 }
 function execute(args,{cwd=null,onLine=null,onErrorLine=null,timeoutMs=30000,input=null}={}) {
   return new Promise((resolve,reject)=>{
-    const child=spawn('codex',args,{cwd:cwd||process.cwd(),windowsHide:true,
-      shell:process.platform==='win32',stdio:['pipe','pipe','pipe']});
+    const child=spawn(resolveCommand('codex'),args,launchOptions(cwd||process.cwd()));
     let stdout='',stderr='',settled=false;
     const timer=setTimeout(()=>{child.kill();finish(new Error('Codex không phản hồi đúng thời gian.'));},timeoutMs);
     function finish(err,value){
@@ -104,8 +104,10 @@ function shortText(value,max=500){return String(value??'').slice(0,max);}
 class AIManager {
   constructor(engine,emit){
     this.engine=engine;this.emit=emit;
-    this.sessions=Array.from({length:3},()=>({projectId:null,model:'gpt-5.1-codex',messages:[],busy:false,connected:false,changes:[],before:null,process:null,stopping:false}));
+    this.sessions=Array.from({length:3},()=>({projectId:null,model:'auto',messages:[],busy:false,connected:false,changes:[],before:null,process:null,stopping:false}));
     this.authProcess=null;
+    this.installProcess=null;
+    this.loginGeneration=0;
     this.authenticated=false;
     this.installed=null;
   }
@@ -129,46 +131,108 @@ class AIManager {
   }
   async checkAuth(){
     if(!(await this.checkInstall())){this.authenticated=false;return false;}
-    try{await execute(['login','status'],{timeoutMs:12000});this.authenticated=true;}
+    try{
+      await execute(['login','status'],{timeoutMs:12000});
+      this.authenticated=true;
+      for(let i=0;i<3;i++)if(this.engine.store.data.slots[i]?.projectId)this.slot(i).connected=true;
+    }
     catch{this.authenticated=false;}
     return this.authenticated;
   }
   state(slot){
     const s=this.slot(slot);
-    return {installed:this.installed,authenticated:this.authenticated,connected:s.connected,
+    return {installed:this.installed,installing:!!this.installProcess,loginPending:!!this.authProcess,authenticated:this.authenticated,connected:s.connected,
       model:s.model,messages:s.messages.slice(-20),busy:s.busy,changes:s.changes.map(c=>({path:c.path,status:c.status})),canUndo:s.changes.length>0&&!s.busy};
   }
-  async connect(slot){
+  installCLI(slot){
     const s=this.slot(slot);
-    if(!s.projectId)throw new Error('Vui lòng chọn dự án Android cho máy này trước.');
-    if(!(await this.checkInstall()))throw new Error('Chưa có Codex CLI. Cài một lần bằng lệnh: npm install -g @openai/codex, sau đó bấm Kết nối lại.');
-    if(await this.checkAuth()){
-      s.connected=true;
-      this.event(slot,{type:'connected',message:'Đã kết nối ChatGPT qua Codex. Cuộc trò chuyện của máy này độc lập.'});
-      return this.state(slot);
-    }
-    if(this.authProcess) {
-      this.event(slot,{type:'info',message:'Đang chờ đăng nhập ChatGPT trên trình duyệt…'});
-      return this.state(slot);
-    }
-    this.event(slot,{type:'info',message:'Đang mở trình duyệt để đăng nhập ChatGPT…'});
-    const child=spawn('codex',['login'],{windowsHide:true,shell:process.platform==='win32',stdio:['ignore','pipe','pipe']});
-    this.authProcess=child;
-    let diagnostic='';
-    child.stdout.on('data',b=>{diagnostic=(diagnostic+b.toString()).slice(-900);});
-    child.stderr.on('data',b=>{diagnostic=(diagnostic+b.toString()).slice(-900);});
+    if(!s.projectId)throw new Error('Chọn dự án trước khi cài Codex.');
+    if(this.installProcess)return this.state(slot);
+    const child=spawn(resolveCommand('npm'),['install','-g','@openai/codex','--no-audit','--no-fund'],launchOptions(process.cwd()));
+    this.installProcess=child;
+    this.event(slot,{type:'info',message:'Đang cài Codex CLI bằng npm trên Windows. Vui lòng đợi…'});
+    let errors='';
+    child.stderr.on('data',chunk=>{errors=(errors+chunk.toString('utf8')).slice(-800);});
     child.on('error',e=>{
-      this.authProcess=null;
-      this.event(slot,{type:'error',message:'Không mở được trình đăng nhập: '+e.message});
+      if(this.installProcess!==child)return;
+      this.installProcess=null;
+      this.event(slot,{type:'error',message:'Không chạy được npm. Hãy cài Node.js hoặc kiểm tra PATH: '+e.message});
     });
     child.on('close',async code=>{
+      if(this.installProcess!==child)return;
+      this.installProcess=null;
+      const success=code===0&&await this.checkInstall();
+      this.event(slot,{type:success?'installed':'error',message:success?
+        'Đã cài Codex CLI. Bấm Kết nối ChatGPT để đăng nhập trên trình duyệt.':
+        'Cài Codex chưa thành công. '+shortText(errors,450)});
+    });
+    return this.state(slot);
+  }
+  async connect(slot,mode='browser'){
+    const s=this.slot(slot);
+    if(!s.projectId)throw new Error('Vui lòng chọn thư mục dự án trước.');
+    if(!['browser','device'].includes(mode))throw new Error('Kiểu đăng nhập không hợp lệ.');
+    if(!(await this.checkInstall())){
+      this.event(slot,{type:'missing-cli',message:'Chưa cài Codex CLI. Bạn có thể bấm Cài Codex (một lần), sau đó đăng nhập ChatGPT.'});
+      return this.state(slot);
+    }
+    if(await this.checkAuth()){
+      s.connected=true;
+      this.event(slot,{type:'connected',message:'Đã kết nối ChatGPT. Chat và thư mục dự án của máy này độc lập.'});
+      return this.state(slot);
+    }
+    if(this.authProcess){
+      if(mode==='browser'){
+        this.event(slot,{type:'info',message:'Một luồng đăng nhập đang chờ hoàn tất. Hãy kiểm tra trình duyệt.'});
+        return this.state(slot);
+      }
+      const previous=this.authProcess;
       this.authProcess=null;
-      if(code===0 && await this.checkAuth()){
+      this.loginGeneration++;
+      try{previous.kill();}catch{/* already closed */}
+    }
+    const generation=++this.loginGeneration;
+    const args=mode==='device'?['login','--device-auth']:['login'];
+    this.event(slot,{type:'info',message:mode==='device'?
+      'Đang tạo mã thiết bị để bạn xác thực ChatGPT trên trình duyệt…':
+      'Đang mở trình duyệt đăng nhập ChatGPT. Sau khi đăng nhập, quay lại Baodroid…'});
+    const child=spawn(resolveCommand('codex'),args,launchOptions(process.cwd()));
+    this.authProcess=child;
+    let output='';
+    let lastNotice='';
+    const relay=chunk=>{
+      if(generation!==this.loginGeneration)return;
+      output=(output+chunk.toString('utf8')).slice(-2400);
+      if(mode!=='device')return;
+      const clean=output.replace(/\x1b\[[0-9;]*m/g,'').replace(/\r/g,'');
+      const link=clean.match(/https:\/\/[^\s]+/g)?.find(url=>
+        /^https:\/\/(?:auth\.openai\.com|chatgpt\.com)\//i.test(url))||'https://auth.openai.com/codex/device';
+      const code=clean.match(/\b[A-Z0-9]{4,6}-[A-Z0-9]{4,6}\b/)?.[0]||null;
+      if(code && lastNotice!==code){
+        lastNotice=code;
+        this.event(slot,{type:'device-code',code,url:link,message:'Mở trang xác thực và nhập mã. Đừng chia sẻ mã với người khác.'});
+      }
+    };
+    child.stdout.on('data',relay);
+    child.stderr.on('data',relay);
+    child.on('error',e=>{
+      if(generation!==this.loginGeneration)return;
+      this.authProcess=null;
+      this.event(slot,{type:'error',message:'Không mở được Codex CLI: '+e.message});
+    });
+    child.on('close',async code=>{
+      if(generation!==this.loginGeneration)return;
+      this.authProcess=null;
+      const authenticated=code===0 && await this.checkAuth();
+      if(authenticated){
         for(let i=0;i<3;i++){
           const other=this.sessions[i];
-          if(other.projectId){other.connected=true;this.event(i,{type:'connected',message:'Đã đăng nhập ChatGPT. Bạn có thể gửi prompt.'});}
+          if(other.projectId){
+            other.connected=true;
+            this.event(i,{type:'connected',message:'Đã đăng nhập ChatGPT. Bạn có thể gửi prompt cho dự án này.'});
+          }
         }
-      } else this.event(slot,{type:'error',message:'Đăng nhập không thành công. '+shortText(diagnostic,250)});
+      }else this.event(slot,{type:'error',message:'Đăng nhập chưa hoàn tất. Thử lại bằng trình duyệt hoặc Mã thiết bị. '+shortText(output,220)});
     });
     return this.state(slot);
   }
@@ -193,8 +257,10 @@ class AIManager {
       'Giải thích kết quả bằng tiếng Việt ngắn gọn. Ứng dụng bên ngoài sẽ tự preview file vừa thay đổi.',
       'NGỮ CẢNH CHAT CỦA RIÊNG DỰ ÁN NÀY:\n'+previous,
       'YÊU CẦU MỚI:\n'+prompt.trim()].join('\n\n');
-    const args=['exec','--json','--sandbox','workspace-write','--ask-for-approval','never','--skip-git-repo-check','--model',model,'-'];
-    const child=spawn('codex',args,{cwd:root,windowsHide:true,shell:process.platform==='win32',stdio:['pipe','pipe','pipe']});
+    const args=['exec','--json','--sandbox','workspace-write','--ask-for-approval','never','--skip-git-repo-check'];
+    if(model!=='auto')args.push('--model',model);
+    args.push('-');
+    const child=spawn(resolveCommand('codex'),args,launchOptions(root));
     s.process=child;
     child.stdin.end(guard);
     let buffer='',stderr='',answer='',done=false;
@@ -269,6 +335,7 @@ class AIManager {
   dispose(){
     for(let i=0;i<3;i++)if(this.sessions[i].process)this.stop(i);
     if(this.authProcess)this.authProcess.kill();
+    if(this.installProcess)this.installProcess.kill();
   }
 }
 module.exports={AIManager,scanSources,changesBetween,restoreSources,canReadFile,ALLOWED_MODELS};
