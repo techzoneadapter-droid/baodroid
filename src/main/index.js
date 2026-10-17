@@ -7,7 +7,9 @@ const {Engine} = require('./engine');
 const {UpdateManager} = require('./update');
 const {AIManager} = require('./ai');
 const {WebPreviewManager} = require('./web-preview');
-let win, engine, updater, ai, webPreview;
+const {AndroidSetup} = require('./android-setup');
+const {NativeProjectPreparation} = require('./native-project');
+let win, engine, updater, ai, webPreview, androidSetup, nativeProject;
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 function send(topic, data) { if (win && !win.isDestroyed()) win.webContents.send(topic, data); }
@@ -33,6 +35,52 @@ function registerHandlers() {
   register('assign-avd', (slot, avd) => engine.assignAvd(slot, avd));
   register('list-avds', () => engine.listAvds());
   register('install-web-deps', (slot) => webPreview.installDependencies(slot));
+  register('initialize-native', async slot => {
+    engine.requireSlot(slot);
+    const assigned=engine.store.data.slots[slot];
+    if(!assigned.projectId)throw new Error('Hãy chọn thư mục dự án trước.');
+    if(ai.isBusy(slot))throw new Error('AI đang chỉnh code cho dự án này. Hãy đợi tác vụ kết thúc.');
+    const project=engine.project(assigned.projectId);
+    if(assigned.nativeMode)return {alreadyReady:true};
+    const info='Baodroid sẽ dùng Android SDK chung, tải Android Emulator và system image từ Google (có thể tốn vài GB), '+
+      'tạo AVD riêng cho máy này. Bạn cần đồng ý điều khoản Android SDK được công bố tại developer.android.com/studio/terms.\n\n'+
+      (['web','expo-web'].includes(project.kind)?
+       'Dự án '+project.name+' sẽ được chuẩn bị bản Android native (Expo prebuild hoặc Capacitor). '+
+       'Lệnh npm có thể cài package và chạy script do dự án khai báo; file package.json và thư mục android/ có thể thay đổi. '+
+       'Nên commit Git hoặc sao lưu dự án trước khi tiếp tục.':'Dự án sẽ được build thành APK và chạy trên emulator cục bộ.')+
+      '\n\nTiếp tục?';
+    const consent=await dialog.showMessageBox(win,{type:'warning',title:'Khởi tạo Android thật',message:'Tạo Android SDK + AVD cho '+project.name,detail:info,
+      buttons:['Hủy','Đồng ý tải, cài đặt & chuẩn bị dự án'],defaultId:0,cancelId:0,noLink:true});
+    if(consent.response!==1)return {cancelled:true};
+    try{
+      if(engine.devices[slot].status!=='off')await engine.stopSlot(slot);
+      engine.update(slot,{status:'booting',previewMode:'setup',build:'building',message:'Đang chuẩn bị SDK và máy Android thật…'});
+      await androidSetup.initialize(slot);
+      await nativeProject.prepare(slot);
+      assigned.nativeMode=true;
+      engine.changed();
+      engine.update(slot,{status:'off',previewMode:null,webUrl:null,build:'idle',message:'Đã chuẩn bị xong. Đang mở Android thật…'});
+      await engine.autoStartSlot(slot);
+      return {ok:true,slot,avd:assigned.avd};
+    }catch(error){
+      engine.update(slot,{status:'error',previewMode:null,build:'error',message:'Khởi tạo Android thất bại: '+error.message});
+      send('sdk-setup',{slot,step:'error',message:error.message});
+      throw error;
+    }
+  });
+  register('switch-web-mode', async slot => {
+    engine.requireSlot(slot);
+    const assigned=engine.store.data.slots[slot];
+    const project=engine.project(assigned.projectId);
+    if(!['web','expo-web'].includes(project.kind))throw new Error('Dự án này không có chế độ Web Preview.');
+    if(ai.isBusy(slot))throw new Error('AI đang sửa mã nguồn. Hãy dừng trước khi đổi chế độ.');
+    if(engine.devices[slot].status!=='off')await engine.stopSlot(slot);
+    assigned.nativeMode=false;
+    engine.changed();
+    engine.update(slot,{status:'off',previewMode:null,webUrl:null,build:'idle',message:'Đang chuyển về Web Preview…'});
+    await engine.autoStartSlot(slot);
+    return true;
+  });
   register('choose-sdk', async () => { const folder = await chooseFolder({title:'Chọn thư mục Android SDK'}); return folder ? engine.configure({sdkPath: folder}) : null; });
   register('set-settings', (settings) => engine.configure(settings));
   register('start-slot', (slot) => engine.startSlot(slot));
@@ -90,6 +138,8 @@ app.whenReady().then(async () => {
   engine = new Engine(store, send);
   webPreview = new WebPreviewManager(engine);
   engine.webPreview = webPreview;
+  androidSetup = new AndroidSetup(engine,send);
+  nativeProject = new NativeProjectPreparation(engine,send);
   ai = new AIManager(engine,send);
   updater = new UpdateManager(value => send('update-status', value));
   registerHandlers();

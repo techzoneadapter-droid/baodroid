@@ -7,6 +7,7 @@ let previewBySlot={};
 let avds=[];
 let view='all';
 let pinnedView=false;
+const preparingSlots=[false,false,false];
 const renderedKeys=['','',''];
 let logs=[];
 let updateState=null;
@@ -25,7 +26,7 @@ async function invoke(name,...args){
    return result.data;
  }catch(error){notify(error.message||String(error),true);return null;}
 }
-const statusText=status=>({off:'Đã dừng',booting:'Đang mở Android',running:'Đang chạy',error:'Cần kiểm tra'})[status]||status||'Đã dừng';
+const statusText=status=>({off:'Đã dừng',booting:'Đang chuẩn bị',running:'Đang chạy',error:'Cần kiểm tra'})[status]||status||'Đã dừng';
 const buildText=build=>({building:'Đang chuẩn bị preview…',deploying:'Đang cài APK…',success:'Đã đồng bộ',error:'Cần kiểm tra',idle:'Chưa chạy'})[build]||'Chờ đồng bộ';
 const webKind=kind=>kind==='web'||kind==='expo-web';
 const safePreviewURL=url=>/^http:\/\/127\.0\.0\.1:4312[0-2]\/$/.test(url||'');
@@ -35,7 +36,7 @@ function cardHTML(i){
  const project=getProject(config.projectId);
  const active=device.status==='running';
  const booting=device.status==='booting';
- const isWeb=Boolean(project&&webKind(project.kind));
+ const isWeb=Boolean(project&&webKind(project.kind)&&!config.nativeMode);
  const picture=active&&!isWeb?previewBySlot[i]:null;
  const url=isWeb&&active&&safePreviewURL(device.webUrl)?device.webUrl:null;
  const options=['<option value="">— Chọn thư mục dự án —</option>']
@@ -56,6 +57,13 @@ function cardHTML(i){
   '<select class="project-select" data-project-slot="'+i+'" aria-label="Dự án của máy Android '+(i+1)+'">'+options+'</select>'+
   '<div class="project-actions"><button class="button connect" data-code-slot="'+i+'" title="Chọn thư mục dự án cục bộ hoặc mở trong VS Code">↗ '+title+'</button>'+
   '<button class="button remove" data-remove-slot="'+i+'"'+(!project?' disabled':'')+' aria-label="Gỡ dự án khỏi Baodroid" title="Gỡ dự án này khỏi Baodroid, không xóa mã nguồn">✕</button></div>'+
+  (project?
+    '<div class="android-setup-actions">'+
+    (config.nativeMode?
+      '<span class="native-active">✓ Android Emulator thật</span>'+
+      (webKind(project.kind)?'<button class="button quiet" data-web-slot="'+i+'">↩ Xem Web</button>':''):
+      '<button class="button native-setup" data-native-slot="'+i+'">⚙ Khởi tạo Android SDK & AVD</button>')+
+    '</div>':'')+
   '<div class="screen-wrap"><div class="phone"><div class="screen" data-touch-slot="'+i+'">'+
   (url?'<iframe class="web-frame" loading="eager" title="Mobile Web Preview '+(i+1)+'" src="'+escapeHTML(url)+'" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerpolicy="no-referrer"></iframe>':
   picture?'<img src="'+picture.image+'" draggable="false" alt="Preview Android '+(i+1)+'">':
@@ -73,7 +81,7 @@ function render(){
  for(let i=0;i<3;i++){
    const slot=state.config.slots[i]||{};
    const device=state.devices[i]||{};
-   const key=[slot.projectId||'',device.status||'off',device.previewMode||'',device.webUrl||''].join('|');
+   const key=[slot.projectId||'',slot.nativeMode?'native':'web',device.status||'off',device.previewMode||'',device.webUrl||''].join('|');
    const current=grid.querySelector('[data-device="'+i+'"]');
    if(!current||renderedKeys[i]!==key){
      const holder=document.createElement('div');holder.innerHTML=cardHTML(i);
@@ -106,6 +114,22 @@ function setView(next){
  });
 }
 function wireCards(){
+ document.querySelectorAll('[data-native-slot]').forEach(el=>{
+   if(el.dataset.bound)return;el.dataset.bound='1';
+   el.addEventListener('click',async ()=>{
+     const slot=Number(el.dataset.nativeSlot);
+     if(preparingSlots[slot])return;
+     preparingSlots[slot]=true;el.disabled=true;el.textContent='Đang khởi tạo Android thật…';
+     const result=await invoke('initializeNative',slot);
+     preparingSlots[slot]=false;
+     if(result&&!result.cancelled)notify('Đã tạo Android SDK & AVD. Đang khởi chạy APK trên emulator.');
+     else if(result?.cancelled){el.disabled=false;el.textContent='⚙ Khởi tạo Android SDK & AVD';}
+   });
+ });
+ document.querySelectorAll('[data-web-slot]').forEach(el=>{
+   if(el.dataset.bound)return;el.dataset.bound='1';
+   el.addEventListener('click',()=>void invoke('switchWebMode',Number(el.dataset.webSlot)));
+ });
  document.querySelectorAll('[data-focus-slot]').forEach(el=>{
    if(el.dataset.focusReady)return;
    el.dataset.focusReady='1';
@@ -168,7 +192,7 @@ function wireCards(){
 }
 function updateEnvironment(){
  const nativeAssigned=state.config.slots.some(slot=>{
-   const project=getProject(slot.projectId);return project&&!webKind(project.kind);
+   const project=getProject(slot.projectId);return project&&(slot.nativeMode||!webKind(project.kind));
  });
  const haveProject=state.config.projects.length>0;
  const missingSDK=avds===null;
@@ -245,5 +269,17 @@ function bind(){
    if($('log-panel').open)renderLogs();
  });
  api.onUpdate(showUpdate);
+ api.onSDKSetup(e=>{
+   if(!e||!Number.isInteger(e.slot)||e.slot<0||e.slot>2)return;
+   const slot=e.slot;
+   const message=String(e.message||'');
+   const card=document.querySelector('[data-device="'+slot+'"]');
+   const status=card?.querySelector('.device-details .message');
+   if(status)status.textContent=message;
+   const button=card?.querySelector('[data-native-slot="'+slot+'"]');
+   if(button&&preparingSlots[slot])button.textContent=e.step==='ready'?'Đang chuẩn bị APK…':
+     e.step==='preparing'?'Đang tạo bản Android…':'Đang cài Android SDK…';
+   if(e.step==='error'){preparingSlots[slot]=false;notify(message,true);}
+ });
 }
 window.addEventListener('DOMContentLoaded',()=>{bind();void refresh();});

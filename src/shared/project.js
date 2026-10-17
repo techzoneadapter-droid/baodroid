@@ -38,7 +38,7 @@ function detectProject(folder) {
   throw new Error('Không tìm thấy dự án Android Gradle, Flutter hoặc React Native hợp lệ.');
 }
 function readApplicationId(projectRoot, kind) {
-  const base = kind === 'flutter' || kind === 'react-native' ? path.join(projectRoot, 'android') : projectRoot;
+  const base = kind === 'flutter' || kind === 'react-native' || kind === 'capacitor' ? path.join(projectRoot, 'android') : projectRoot;
   for (const p of ['app/build.gradle.kts', 'app/build.gradle']) {
     const file = path.join(base, p);
     if (!fs.existsSync(file)) continue;
@@ -48,7 +48,7 @@ function readApplicationId(projectRoot, kind) {
   }
   return null;
 }
-function gradleRoot(folder, kind) { return kind === 'flutter' || kind === 'react-native' ? path.join(folder, 'android') : folder; }
+function gradleRoot(folder, kind) { return kind === 'flutter' || kind === 'react-native' || kind === 'capacitor' ? path.join(folder, 'android') : folder; }
 function findDebugApk(projectRoot) {
   const target = path.join(projectRoot, 'app', 'build', 'outputs', 'apk', 'debug');
   if (!fs.existsSync(target)) return null;

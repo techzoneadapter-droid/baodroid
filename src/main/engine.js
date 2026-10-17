@@ -85,7 +85,7 @@ class Engine {
     try {
       const assigned=this.store.data.slots[slot];
       const project=this.project(assigned.projectId);
-      if((project.kind==='web'||project.kind==='expo-web') && this.webPreview) {
+      if((project.kind==='web'||project.kind==='expo-web') && !assigned.nativeMode && this.webPreview) {
         return this.webPreview.start(slot);
       }
       if (!assigned.avd) {
@@ -179,7 +179,10 @@ class Engine {
     this.requireSlot(slot); this.requireStopped(slot);
     const assigned=this.store.data.slots[slot];
     if (!assigned.projectId || !assigned.avd) throw new Error('Chọn dự án và AVD trước khi khởi chạy.');
-    const project=this.project(assigned.projectId);
+    const original=this.project(assigned.projectId);
+    const kind=assigned.nativeMode && original.kind==='web'?'capacitor':
+      assigned.nativeMode && original.kind==='expo-web'?'react-native':original.kind;
+    const project={...original,kind};
     detectProject(project.path);
     const avds=await this.listAvds();
     if (!avds.includes(assigned.avd)) throw new Error('AVD không tồn tại trong Android SDK: '+assigned.avd);
@@ -188,7 +191,7 @@ class Engine {
     const list=await exec(this.tools().adb,['devices'],{timeout:10000});
     if (list.stdout.includes(serial+'\t')) throw new Error(`Cổng ${serial} đang bận. Hãy đóng emulator bên ngoài Baodroid.`);
     const generation=++worker.generation;
-    this.update(slot,{status:'booting',build:'idle',message:'Đang khởi động AVD...',lastSync:null});
+    this.update(slot,{status:'booting',previewMode:'android',webUrl:null,build:'idle',message:'Đang khởi động Android Emulator thật…',lastSync:null});
     this.log(`Khởi động ${assigned.avd} cho ${project.name} (${serial}).`,'info',slot);
     try {
       worker.emulator=launch(this.tools().emulator,['-avd',assigned.avd,'-port',String(5554+slot*2),'-no-window','-no-audio','-no-boot-anim','-netdelay','none','-netspeed','full'],{
@@ -253,7 +256,7 @@ class Engine {
   }
   watch(slot, project) {
     const worker=this.workers[slot];
-    const ignored=(p)=> /(^|[\\/])(\.git|\.gradle|\.dart_tool|\.idea|node_modules|build|\.next|\.vscode)([\\/]|$)/i.test(p);
+    const ignored=(p)=> /(^|[\\/])(\.git|\.gradle|\.dart_tool|\.idea|node_modules|build|dist|\.next|\.expo|\.vscode)([\\/]|$)/i.test(p);
     worker.watcher=chokidar.watch(project.path,{ignoreInitial:true,ignored,awaitWriteFinish:{stabilityThreshold:140,pollInterval:50},depth:12});
     worker.watcher.on('all',(event,file)=>{
       if (!['add','change','unlink'].includes(event) || this.devices[slot].status!=='running') return;
@@ -270,7 +273,7 @@ class Engine {
             this.log('Thay đổi native/cấu hình React Native → build lại APK.','info',slot);
             this.queueBuild(slot,false);
           } else this.log('Metro đang nhận thay đổi → Fast Refresh.','info',slot);
-        } else if (project.kind==='gradle') this.queueBuild(slot,false);
+        } else if (project.kind==='gradle'||project.kind==='capacitor') this.queueBuild(slot,false);
         else this.restartFlutter(slot,project);
       },220);
     });
@@ -370,6 +373,15 @@ class Engine {
   }
   async buildNative(slot,project,generation,mustDeploy) {
     const base=gradleRoot(project.path,project.kind);
+    if(project.kind==='capacitor') {
+      this.update(slot,{build:'building',message:'Đang build Vite + Capacitor vào APK…'});
+      const npm=process.platform==='win32'?'npm.cmd':'npm';
+      const npx=process.platform==='win32'?'npx.cmd':'npx';
+      const env={...process.env,ANDROID_SDK_ROOT:this.store.data.settings.sdkPath,
+        ANDROID_HOME:this.store.data.settings.sdkPath};
+      await exec(npm,['run','build'],{cwd:project.path,shell:process.platform==='win32',env,timeout:600000});
+      await exec(npx,['--no-install','cap','sync','android'],{cwd:project.path,shell:process.platform==='win32',env,timeout:300000});
+    }
     const gradle=gradleCommand(base);
     this.update(slot,{build:'building',message:project.kind==='react-native'?'Đang build React Native Android…':'Gradle incremental build...'});
     const started=Date.now();
@@ -509,7 +521,7 @@ class Engine {
     const previous=this.devices[slot].status;
     this.clearWorker(slot);
     this.workers[slot].recoveryAttempts=0;
-    this.update(slot,{status:'off',build:'idle',message:'Đã dừng thủ công',lastSync:null,rotation:0,screenHeight:undefined,screenWidth:undefined});
+    this.update(slot,{status:'off',previewMode:null,webUrl:null,build:'idle',message:'Đã dừng thủ công',lastSync:null,rotation:0,screenHeight:undefined,screenWidth:undefined});
     if(previous!=='off') {
       try {await this.adb(slot,['emu','kill'],3500);}catch{/* Emulator already stopped */}
       this.log('Đã dừng emulator.','info',slot);

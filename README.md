@@ -1,62 +1,43 @@
-# Baodroid v0.7.0 — Preview lớn và kết nối ChatGPT dễ hơn
+# Baodroid v0.8.0 — Một nút khởi tạo Android thật
 
-Baodroid cho phép xem trước tối đa **3 dự án** từ thư mục được chọn trên máy tính. Không cần điện thoại USB và **không bắt buộc Android SDK cho dự án web**.
+Baodroid là ứng dụng Windows để chọn tối đa ba thư mục dự án, chạy bản xem trước và dùng ChatGPT/Codex hỗ trợ sửa mã nguồn trong từng dự án. Phiên bản này bổ sung nút **Khởi tạo Android SDK & AVD** trực tiếp trên từng màn hình.
 
-## Đã kiểm tra loại dự án thật trên GitHub
+## Quy trình
 
-- **ReelTara**: React + TypeScript + Vite, chạy `npm run dev`. Đây là một ứng dụng web dạng mobile, không phải APK Android.
-- **CHƯƠNG**: Expo SDK 54 + React Native/Expo Router, có hỗ trợ Expo Web; repository hiện chưa commit thư mục `android/`. Có thể xem trước phần giao diện web bằng Expo Web. Các native module (IAP, push, quảng cáo, v.v.) vẫn cần thiết bị/emulator Android để đánh giá đúng và có thể không chạy được trên web.
-- **MiniZap**: React/Vite + Capacitor, preview bằng Vite; Android native qua Capacitor/Android SDK là một quy trình khác.
+1. Mở Baodroid trên Windows → Thêm dự án / Chọn thư mục dự án → trỏ vào thư mục có package.json, pubspec.yaml hoặc Gradle settings.
+2. Sau khi chọn dự án, Baodroid có thể mở **Web Preview** ngay với Vite/Expo. Đây **không phải Android native**.
+3. Nhấn **Khởi tạo Android SDK & AVD** dưới thông tin dự án. Baodroid hiển thị hộp thoại xác nhận tải SDK/system image và **nếu cần** điều chỉnh thư mục dự án. Nên commit Git hoặc sao lưu trước khi chấp nhận.
+4. Sau khi bạn chấp nhận, Baodroid tìm Android SDK/JDK hiện có, lấy **Android Command-line Tools từ Google**, cài platform-tools, emulator, Android API 35/36, system image Google APIs x86_64, chấp nhận SDK licenses theo lựa chọn đã xác nhận và tạo AVD `Baodroid_Preview_1` / `_2` / `_3` (tùy slot).
+5. Với React/Vite, Baodroid dùng Capacitor để tạo Android WebView APK; với Expo như **CHƯƠNG**, sử dụng Expo prebuild để sinh thư mục Android native và build APK; với dự án Gradle/React Native/Flutter native sẵn có, dùng build tương ứng.
+6. AVD được gán vào slot, Baodroid khởi động emulator, build + deploy APK và truyền ảnh màn hình Android thật qua ADB lên khung preview. Tương tác chạm/vuốt trực tiếp trên preview.
+7. Với dự án có Web Preview, nhấn **Xem Web** để quay về kiểm thử nhanh bằng Vite/Expo.
 
-## Chạy nhanh
+## Các dự án đã đối chiếu từ GitHub
 
-1. Tải source của dự án vào máy hoặc mở thư mục dự án đã có trong VS Code.
-2. Mở Baodroid → **Thêm dự án** hoặc **Chọn thư mục dự án** ở từng máy → trỏ vào **thư mục gốc chứa `package.json`**.
-3. Baodroid tự nhận diện:
-   - `web` (Vite) → chạy `npm run dev -- --host 127.0.0.1 --port 43120..43122 --strictPort`, nhúng mobile preview qua iframe cục bộ.
-   - `expo-web` (Expo managed hoặc bare) → chạy `npx --no-install expo start --web --port 43120..43122 --localhost`, nhúng mobile preview cục bộ.
-   - `flutter`, `gradle`, `react-native` không có Expo → dùng **Android Emulator thực** như trước, cần Android SDK + AVD.
-4. Nếu dự án chưa cài `node_modules`, Baodroid hiện **Cài thư viện & chạy**. Nút này yêu cầu xác nhận trước khi thực thi `npm install`; npm có thể chạy script do dự án chỉ định. Bạn cũng có thể chạy `npm install` từ VS Code rồi khởi động lại preview.
-5. Sửa và lưu code: Vite dùng HMR, Expo Web dùng Metro refresh; không chạy Gradle chỉ để cập nhật UI web. Các máy dùng cổng riêng `43120`, `43121`, `43122`.
-6. Nhấn chọn từng máy để phóng lớn. Mỗi máy tiếp tục có khung ChatGPT/Codex độc lập phía dưới preview để chỉnh trực tiếp code trong đúng thư mục được gán.
+- **ReelTara** là dự án React + Vite. Nhấn nút sẽ thêm Capacitor và tạo thư mục `android/`. Bản Android dùng WebView của Capacitor và vẫn là ứng dụng Android có APK chạy trên emulator, **không trở thành React Native**.
+- **CHƯƠNG** là Expo + React Native, chưa có thư mục Android trong repository. Expo prebuild tạo native Android; các plugin như IAP/ads có thể yêu cầu cấu hình riêng và có thể phát sinh lỗi build — lỗi sẽ được báo trong Nhật ký.
+- **MiniZap** là Vite + Capacitor, Baodroid sử dụng cấu hình Capacitor hiện có và bổ sung Android platform nếu cần.
 
-## Phân biệt quan trọng
+## Dung lượng & điều kiện bắt buộc
 
-**Web Mobile Preview là trình duyệt mô phỏng kích thước điện thoại, không phải một phiên Android chạy APK.** Vì vậy không thể dùng để xác nhận các tính năng chỉ tồn tại trên Android (push native, IAP, Bluetooth, camera native, quyền hệ thống, v.v.). Nếu bạn cần kiểm tra các tính năng đó, phải cài Android SDK + AVD hoặc một Android runtime tương đương. Baodroid không thể chuyển một app web thành ứng dụng Android thực nếu không có công cụ build/runtime tương ứng.
+- **SDK cài dùng chung** cho tất cả dự án (ưu tiên SDK hiện có, nếu thiếu cài vào LocalAppData/Baodroid/Android/Sdk).
+- **AVD riêng từng slot** để không đè cấu hình lẫn nhau.
+- Cần Windows 10/11 x64; có Node.js/npm (Vite/Expo/Capacitor) và Java/JDK tương thích với SDK/Gradle. Nếu Android Studio đã được cài, Baodroid tự tìm JBR đi kèm. Nếu thiếu Java hoặc không bật ảo hóa phần cứng, quá trình có thể cần bạn bổ sung JDK/bật virtualization.
+- Tải SDK và system image có thể tốn nhiều GB và mất thời gian theo mạng. Lần đầu build Gradle/Expo cũng có thể mất vài phút. **Không cam kết Android native cập nhật trong 0,5 giây**, đặc biệt với Gradle/Capacitor.
+- Các bước cài npm có thể chạy script do dự án khai báo, nên chỉ dùng dự án bạn tin tưởng. Chỉnh sửa `android/`, `package.json`, `package-lock.json` và `capacitor.config.json` chỉ xảy ra sau khi xác nhận trong ứng dụng.
+- Bản Expo có module native phải được kiểm thử thực tế trong Android Emulator; không thể đánh giá IAP, notifications, SDK quảng cáo bằng iframe Web Preview.
 
-Với dự án web, Baodroid không còn chặn tất cả các thao tác vì thiếu SDK. Nút Android SDK chỉ hiện khi có dự án native cần nó.
+## AI Coding
 
-## Yêu cầu môi trường
+ChatGPT/Codex vẫn có phần chat, model và undo riêng cho 3 dự án. Baodroid không điều khiển tab chatgpt.com; dùng Codex CLI có đăng nhập trình duyệt hoặc mã thiết bị, và chỉ chạy tác vụ trong workspace đã gắn. Việc chỉnh mã bằng AI vẫn phải được kiểm tra kỹ trước khi phát hành.
 
-- Windows 10/11 x64 + Node.js/npm.
-- Folder đã tải về máy, chứa mã nguồn dự án. Liên kết GitHub không đồng nghĩa tự có thư mục dự án trên ổ đĩa.
-- `node_modules` (có thể cài bằng nút trong app).
-- Android native: thêm Android SDK, Android Emulator và AVD theo loại dự án.
-- Trình phát triển web cần mở cổng loopback trên Windows; Baodroid sử dụng localhost, không gửi mã nguồn lên máy chủ của Baodroid.
-
-## Kiểm tra phát hành
+## Build source
 
 ```bash
 npm install
 npm test
 npm run check
-npm start
+npm run dist:win
 ```
 
-CI GitHub Actions trên Windows tạo Setup NSIS + `latest.yml` để nút **Kiểm tra bản vá** nhận phiên bản mới.
-
-
-## Nâng cấp v0.7.0
-
-- Xem 3 máy hoặc chọn riêng một máy. Khi có dự án web, Baodroid tự ưu tiên màn hình đầu tiên để xem lớn. Bấm **Xem lớn** trên từng thẻ để phóng to và có thể quay lại bố cục 3 máy. Vùng preview rộng hơn.
-- Không còn tải lại iframe Vite/Expo khi Baodroid gửi thông báo trạng thái nhưng địa chỉ và trạng thái preview không đổi. Nhờ vậy ô nhập/chat và trạng thái trang web ít bị gián đoạn hơn.
-- Vite/Expo hiện rõ nhãn **Web mobile ≠ Android native**. Web preview chỉ mô phỏng viewport điện thoại; muốn chạy APK và API hệ điều hành Android thật vẫn cần Android SDK + AVD.
-- **Kết nối ChatGPT** giờ dò tìm Codex CLI ở thư mục npm của Windows, hiển thị nút **Cài Codex CLI** nếu chưa cài. Quá trình cài dùng npm toàn cục và chỉ được chạy khi bạn xác nhận.
-- Hai lựa chọn đăng nhập: đăng nhập ChatGPT qua trình duyệt bằng lệnh Codex chính thức, hoặc **Đăng nhập bằng mã** (device authentication). Dùng account ChatGPT chung nhưng 3 lịch sử AI và 3 workspace vẫn độc lập.
-- Model mặc định **Tự động (Codex CLI chọn)** để tránh phải chọn các model không khả dụng đối với tài khoản. Các lựa chọn khác tùy khả năng Codex CLI và quyền truy cập.
-- Khi đăng nhập bằng mã, mã hiển thị trong Baodroid. Không chia sẻ mã, mật khẩu hay cookie. Baodroid không thu thập thông tin đăng nhập ChatGPT.
-- Nếu CLI đã được cài nhưng Baodroid vẫn không tìm thấy, hãy kiểm tra phiên bản Node.js/npm trong Windows Terminal và khởi động lại Baodroid.
-
-### Giới hạn bảo mật
-
-Codex vẫn là công cụ có quyền sửa file nguồn. Baodroid dùng sandbox workspace-write, tạo điểm hoàn tác trước khi sửa và kiểm tra xung đột trước khi khôi phục. Mức cô lập file còn phụ thuộc vào khả năng sandbox trên Windows và cấu hình Codex. Hãy commit Git trước khi chạy tác vụ sửa mã quan trọng.
+GitHub Actions build Windows x64, xuất bản release và `latest.yml` để nút **Kiểm tra bản vá** sử dụng.
