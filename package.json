@@ -1,7 +1,7 @@
 {
   "name": "baodroid",
   "productName": "Baodroid",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Local Windows Android preview hub for VS Code projects",
   "author": "Baodroid Contributors",
   "license": "MIT",
@@ -10,7 +10,7 @@
     "start": "electron .",
     "dev": "electron .",
     "test": "node --test tests/*.test.js",
-    "check": "node --check src/main/index.js && node --check src/main/engine.js && node --check src/main/process.js && node --check src/main/update.js && node --check src/renderer/app.js",
+    "check": "node --check src/main/index.js && node --check src/main/engine.js && node --check src/main/process.js && node --check src/main/update.js && node --check src/main/vscode.js && node --check src/renderer/app.js",
     "dist:win": "electron-builder --win nsis --publish never",
     "release:win": "electron-builder --win nsis --publish always"
   },

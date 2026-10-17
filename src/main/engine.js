@@ -6,6 +6,7 @@ const chokidar = require('chokidar');
 const {spawn} = require('node:child_process');
 const {detectProject, readApplicationId, gradleRoot, findDebugApk} = require('../shared/project');
 const {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand} = require('./process');
+const {findVSCode, openVSCodeFolder} = require('./vscode');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const isSlot = i => Number.isInteger(i) && i >= 0 && i <= 2;
 
@@ -89,13 +90,34 @@ class Engine {
   async openVSCode(id) {
     const project=this.project(id);
     if (!fs.existsSync(project.path)) throw new Error('Thư mục dự án đã bị di chuyển.');
-    // Open the user's existing VS Code installation, do not modify source files.
-    const candidate=process.platform==='win32'?'code.cmd':'code';
-    const command=process.platform==='win32'?'cmd.exe':candidate;
-    const args=process.platform==='win32'? ['/d','/s','/c','code',project.path] : [project.path];
-    const child=spawn(command,args,{detached:true,windowsHide:true,stdio:'ignore'});
-    child.on('error', err => this.log('Không thể mở VS Code: '+err.message,'error'));
-    child.unref(); return true;
+    await openVSCodeFolder(project.path);
+    this.log(`Đã mở ${project.name} trong VS Code.`, 'success');
+    return true;
+  }
+  async diagnostics() {
+    const report={sdkPath:this.store.data.settings.sdkPath,adb:'',avds:[],vscodePath:findVSCode(),flutter:'Chưa kiểm tra',issues:[]};
+    try {report.adb=(await this.checkAdb()).trim();}catch(e){report.issues.push('ADB: '+e.message);}
+    try {report.avds=await this.listAvds();if(!report.avds.length)report.issues.push('Chưa có AVD. Tạo máy ảo trong Android Studio Device Manager.');}catch(e){report.issues.push('AVD: '+e.message);}
+    if(!report.vscodePath) report.issues.push('Không tìm thấy VS Code ở vị trí cài đặt tiêu chuẩn.');
+    try { const cmd=process.platform==='win32'?'where.exe':'which'; report.flutter=(await exec(cmd,['flutter'],{timeout:6000})).stdout.trim(); }
+    catch {report.flutter='Không tìm thấy Flutter trong PATH (chỉ cần nếu dùng Flutter).';}
+    return report;
+  }
+  async deviceAction(slot,action) {
+    this.requireSlot(slot);
+    if(this.devices[slot].status!=='running') throw new Error('Chỉ thao tác được trên máy ảo đang chạy.');
+    switch(action){
+      case 'home':await this.adb(slot,['shell','input','keyevent','KEYCODE_HOME'],8000);return true;
+      case 'back':await this.adb(slot,['shell','input','keyevent','KEYCODE_BACK'],8000);return true;
+      case 'rotate':{
+        const rotation=this.devices[slot].rotation===1?0:1;
+        await this.adb(slot,['shell','settings','put','system','accelerometer_rotation','0'],8000);
+        await this.adb(slot,['shell','settings','put','system','user_rotation',String(rotation)],8000);
+        this.update(slot,{rotation});return true;
+      }
+      case 'screenshot':return await this.capture(slot);
+      default:throw new Error('Tác vụ thiết bị không hợp lệ.');
+    }
   }
   async adb(slot,args,timeout=30000) {
     return exec(this.tools().adb,['-s',this.devices[slot].serial,...args],{timeout});
@@ -289,7 +311,7 @@ class Engine {
       const child=spawn(this.tools().adb,['-s',this.devices[slot].serial,'exec-out','screencap','-p'],{windowsHide:true,stdio:['ignore','pipe','ignore']});
       let chunks=[],bytes=0,done=false;
       const timer=setTimeout(()=>{child.kill();finish(new Error('Ảnh xem trước timeout'));},10000);
-      const finish=(err)=>{if(done)return;done=true;clearTimeout(timer);if(err)reject(err);else resolve();};
+      const finish=(err,result)=>{if(done)return;done=true;clearTimeout(timer);if(err)reject(err);else resolve(result);};
       child.stdout.on('data',b=>{bytes+=b.length;if(bytes>6*1024*1024){child.kill();finish(new Error('Ảnh quá lớn'));}else chunks.push(b);});
       child.on('error',finish);
       child.on('close',code=>{
@@ -300,7 +322,7 @@ class Engine {
         if(!w||!h)return finish(new Error('Sai kích thước ảnh'));
         this.devices[slot].screenWidth=w;this.devices[slot].screenHeight=h;
         this.emit('preview',{slot,image:'data:image/png;base64,'+png.toString('base64'),width:w,height:h});
-        finish(null);
+        finish(null,png);
       });
     });
   }
@@ -316,7 +338,7 @@ class Engine {
     this.requireSlot(slot);
     const previous=this.devices[slot].status;
     this.clearWorker(slot);
-    this.update(slot,{status:'off',build:'idle',message:'Đã dừng',lastSync:null,screenHeight:undefined,screenWidth:undefined});
+    this.update(slot,{status:'off',build:'idle',message:'Đã dừng',lastSync:null,rotation:0,screenHeight:undefined,screenWidth:undefined});
     if(previous!=='off') {
       try {await this.adb(slot,['emu','kill'],3500);}catch{/* Emulator already stopped */}
       this.log('Đã dừng emulator.','info',slot);

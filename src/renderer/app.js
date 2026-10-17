@@ -2,6 +2,28 @@
 const api=window.baodroid;
 let state={config:{projects:[],slots:[{},{},{}],settings:{}},devices:[],logs:[]};
 let avds=[],logEntries=[],previews={},updateInfo={};
+let viewMode='all';
+const zoomBySlot=['100','100','100'];
+const preference=(key,initial)=>{try {return JSON.parse(localStorage.getItem(key))??initial;} catch{return initial;}};
+const setPreference=(key,value)=>{try {localStorage.setItem(key,JSON.stringify(value));}catch{/* persistence not available */}};
+const layout={left:preference('baodroid:leftCollapsed',false),right:preference('baodroid:rightCollapsed',false),projects:preference('baodroid:projectsCollapsed',true)};
+function syncLayout(){
+  $('app').classList.toggle('left-collapsed',layout.left);
+  $('app').classList.toggle('right-collapsed',layout.right);
+  $('projects').classList.toggle('folded',layout.projects);
+  $('btn-toggle-left').setAttribute('aria-expanded',String(!layout.left));
+  $('btn-toggle-right').setAttribute('aria-expanded',String(!layout.right));
+  $('btn-toggle-projects').setAttribute('aria-expanded',String(!layout.projects));
+  $('btn-toggle-projects').textContent=layout.projects?'▾ Hiện danh sách':'▴ Ẩn danh sách';
+}
+function setLayout(which,value){layout[which]=value;setPreference('baodroid:'+({left:'leftCollapsed',right:'rightCollapsed',projects:'projectsCollapsed'}[which]),value);syncLayout();}
+function changeView(next){
+  viewMode=next;const grid=$('device-grid');
+  grid.classList.toggle('focused',next!=='all');
+  document.querySelectorAll('[data-view]').forEach(b=>{const chosen=b.dataset.view===next;b.classList.toggle('active',chosen);b.setAttribute('aria-pressed',String(chosen));});
+  document.querySelectorAll('[data-device]').forEach(card=>card.classList.toggle('is-focused',String(card.dataset.device)===next));
+}
+
 const $=(id)=>document.getElementById(id);
 const html=(text)=>String(text ?? '').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function toast(text,error=false){const node=$('toast');node.textContent=text;node.className='toast show'+(error?' error':'');clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>node.className='toast',4600);}
@@ -45,18 +67,30 @@ function renderDevices(){
     const avdOptions=`<option value="">${hasAvd?'— Chọn AVD —':'Chưa tìm thấy AVD'}</option>`+avds.map(x=>`<option value="${html(x)}" ${x===assigned.avd?'selected':''} ${slots.some((s,j)=>j!==i&&s.avd===x)?'disabled':''}>${html(x)}</option>`).join('');
     const statusColor=d.status==='running'?'green':d.status==='booting'?'orange':d.status==='error'?'red':'gray';
     const savedPreview=active?previews[i]:null;
-    return `<article class="device-card ${active?'is-running':''}" data-device="${i}">
+    return `<article class="device-card ${active?'is-running':''} ${viewMode===String(i)?'is-focused':''}" data-device="${i}">
       <div class="device-heading"><strong><span class="dot ${statusColor}"></span>Emulator ${i+1}</strong><span class="status-badge">${prettyStatus(d.status)}</span></div>
       <select class="avd-select project-select" data-slot="${i}" ${locked?'disabled':''} aria-label="Dự án máy ${i+1}">${projectOptions}</select>
       <select class="avd-select avd-assignment" data-slot="${i}" ${locked?'disabled':''} aria-label="Android AVD máy ${i+1}">${avdOptions}</select>
-      <div class="phone-wrap"><div class="phone-shell"><div class="phone-screen" data-touch-slot="${i}">
+      <div class="phone-wrap"><div class="phone-shell ${zoomBySlot[i]==='100'?'':'zoom-'+zoomBySlot[i]} ${savedPreview?.width>savedPreview?.height?'landscape':''}"><div class="phone-screen" data-touch-slot="${i}">
         ${savedPreview?`<img src="${savedPreview.image}" draggable="false" alt="Ảnh màn hình Android ${i+1}"/>`:`<div class="phone-placeholder"><div class="phone-symbol">▯</div><b>${busy?'Đang mở Android…':active?'Đang chờ ảnh…':'Chưa kết nối'}</b><small>${busy?'Đợi AVD hoàn tất khởi động':active?'ADB đang lấy ảnh màn hình':'Chọn dự án và AVD để bắt đầu'}</small></div>`}
         <div class="camera"></div></div></div></div>
       <div class="device-message" title="${html(d.message)}">${html(d.message || '')}</div>
       <div class="device-controls"><button class="btn ${active||busy?'stop':'primary'}" data-command="${active||busy?'stop':'start'}" data-slot="${i}" ${!locked&&(!selected||!assigned.avd)?'disabled':''}>${active||busy?'■ Dừng':'▶ Bắt đầu'}</button><button class="btn reload" data-command="reload" data-slot="${i}" ${!active?'disabled':''}>⟳ Tải lại</button></div>
+      <div class="device-tools">
+        <button data-device-action="home" data-slot="${i}" ${!active?'disabled':''} title="Màn hình Home Android">⌂ Home</button>
+        <button data-device-action="back" data-slot="${i}" ${!active?'disabled':''} title="Quay lại trên Android">← Back</button>
+        <button data-device-action="rotate" data-slot="${i}" ${!active?'disabled':''} title="Xoay màn hình Android">⟳ Xoay</button>
+        <button data-device-action="screenshot" data-slot="${i}" ${!active?'disabled':''} title="Lưu ảnh chụp màn hình ra PC">▣ Chụp</button>
+        <select class="zoom-select" data-zoom-slot="${i}" aria-label="Kích thước hiển thị máy ${i+1}">
+          ${['75','100','125','150'].map(n=>`<option value="${n}" ${zoomBySlot[i]===n?'selected':''}>${n}%</option>`).join('')}
+        </select>
+      </div>
       <div class="device-bottom"><span>${html(d.serial||'emulator-'+(5554+i*2))}</span><span>${d.build==='building'?'Đang build…':d.build==='deploying'?'Đang deploy…':d.build==='error'?'Lỗi build':d.lastSync?'✓ Đã đồng bộ':'Chờ chạy'}</span></div>
     </article>`;
   }).join('');
+  changeView(viewMode);
+  document.querySelectorAll('[data-zoom-slot]').forEach(el=>el.addEventListener('change',e=>{const slot=Number(e.currentTarget.dataset.zoomSlot);zoomBySlot[slot]=e.currentTarget.value;const shell=e.currentTarget.closest('.device-card').querySelector('.phone-shell');shell.classList.remove('zoom-75','zoom-125','zoom-150');if(zoomBySlot[slot]!=='100')shell.classList.add('zoom-'+zoomBySlot[slot]);}));
+  document.querySelectorAll('[data-device-action]').forEach(el=>el.addEventListener('click',async e=>{const slot=Number(e.currentTarget.dataset.slot),cmd=e.currentTarget.dataset.deviceAction;const result=await safeCall('deviceAction',slot,cmd);if(result&&cmd==='screenshot')toast('Đã lưu ảnh chụp: '+result);}));
   document.querySelectorAll('.project-select').forEach(el=>el.addEventListener('change',async e=>{await safeCall('assignProject',Number(e.target.dataset.slot),e.target.value||null);}));
   document.querySelectorAll('.avd-assignment').forEach(el=>el.addEventListener('change',async e=>{await safeCall('assignAvd',Number(e.target.dataset.slot),e.target.value);}));
   document.querySelectorAll('[data-command]').forEach(el=>el.addEventListener('click',async e=>{
@@ -96,10 +130,23 @@ async function refresh(){
   const list=await safeCall('listAvds');if(list){avds=list;renderDevices();}
 }
 function bind(){
+  syncLayout();
+  $('btn-toggle-left').addEventListener('click',()=>setLayout('left',!layout.left));
+  $('btn-toggle-right').addEventListener('click',()=>setLayout('right',!layout.right));
+  $('btn-rail-close').addEventListener('click',()=>setLayout('right',true));
+  $('btn-toggle-projects').addEventListener('click',()=>setLayout('projects',!layout.projects));
+  document.querySelectorAll('[data-view]').forEach(button=>button.addEventListener('click',()=>changeView(button.dataset.view)));
+  window.addEventListener('keydown',e=>{if(e.key==='Escape'&&viewMode!=='all')changeView('all');});
   $('btn-add-project').addEventListener('click',()=>void safeCall('addProject'));
   $('btn-refresh').addEventListener('click',()=>void refresh());
-  $('btn-settings').addEventListener('click',()=>$('settings').scrollIntoView({behavior:'smooth',block:'center'}));
+  $('btn-settings').addEventListener('click',()=>{setLayout('right',false);$('settings').scrollIntoView({behavior:'smooth',block:'center'});});
   $('btn-sdk').addEventListener('click',async()=>{const result=await safeCall('chooseSdk');if(result){toast('Đã cấu hình Android SDK');void refresh();}});
+  $('btn-diagnostics').addEventListener('click',async()=>{
+    const node=$('diagnostics-output');node.hidden=false;node.textContent='Đang kiểm tra...';
+    const report=await safeCall('diagnostics');
+    if(!report){node.textContent='Không thể kiểm tra môi trường.';return;}
+    node.textContent=[`ADB: ${report.adb?'Đã kiểm tra':'Chưa kết nối'}`,`AVD: ${report.avds.length} thiết bị`, `VS Code: ${report.vscodePath||'Chưa tìm thấy'}`,`Flutter: ${report.flutter||'Không có'}`, ...report.issues.map(item=>'⚠ '+item)].join('\n');
+  });
   $('btn-check-adb').addEventListener('click',async()=>{const v=await safeCall('checkAdb');if(v!==null)toast('ADB: '+(v.trim().split('\n').slice(-2).join(' | ')||'Sẵn sàng'));});
   $('btn-update').addEventListener('click',()=>void safeCall('checkUpdate'));
   $('update-dismiss').addEventListener('click',()=>$('update-popup').hidden=true);
@@ -112,12 +159,14 @@ function bind(){
     document.querySelectorAll('.nav').forEach(n=>n.classList.remove('selected'));nav.classList.add('selected');
     const target=nav.dataset.target==='dashboard'?'dashboard':nav.dataset.target;
     if(target==='dashboard')$('dashboard').scrollTo({top:0,behavior:'smooth'});
-    else $(target).scrollIntoView({behavior:'smooth',block:'start'});
+    else if(target==='projects'){setLayout('projects',false);$(target).scrollIntoView({behavior:'smooth',block:'start'});}
+    else {if(target==='settings')setLayout('right',false);$(target).scrollIntoView({behavior:'smooth',block:'start'});}
   }));
   $('repo-link').addEventListener('click',event=>{event.preventDefault();toast('Repository: github.com/techzoneadapter-droid/baodroid');});
   api.onState(next=>{state=next;render();});
   api.onLog(line=>{logEntries.push(line);if(logEntries.length>350)logEntries.shift();renderLogs();});
   api.onPreview(info=>{previews[info.slot]=info;const screen=document.querySelector(`.phone-screen[data-touch-slot="${info.slot}"]`);if(!screen)return;
+    screen.closest('.phone-shell')?.classList.toggle('landscape',info.width>info.height);
     let img=screen.querySelector('img');if(!img){screen.querySelector('.phone-placeholder')?.remove();img=document.createElement('img');img.alt=`Ảnh màn hình Android ${info.slot+1}`;img.draggable=false;screen.prepend(img);}img.src=info.image;
   });
   api.onUpdate(showUpdate);

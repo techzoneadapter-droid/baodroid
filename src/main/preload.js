@@ -3,7 +3,7 @@ const {contextBridge, ipcRenderer} = require('electron');
 const routes = [
   'get-state','add-project','remove-project','assign-project','assign-avd','list-avds',
   'choose-sdk','set-settings','start-slot','stop-slot','reload-slot','open-vscode',
-  'tap','swipe','check-update','download-update','install-update','check-adb'
+  'tap','swipe','device-action','diagnostics','check-update','download-update','install-update','check-adb'
 ];
 const invoke = Object.fromEntries(routes.map(route => [route.replace(/-([a-z])/g, (_, l) => l.toUpperCase()), (...args) => ipcRenderer.invoke(route, ...args)]));
 const observe = (event) => (fn) => {

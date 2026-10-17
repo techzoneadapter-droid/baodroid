@@ -11,19 +11,21 @@
     <div class="header-divider"></div>
     <div class="connection"><span class="pulse"></span><span>Workspace cục bộ</span><span class="tag">VS Code</span></div>
     <div class="header-actions">
+      <button class="top-action layout-action" id="btn-toggle-left" title="Thu gọn/mở rộng thanh điều hướng" aria-label="Thu gọn thanh trái" aria-expanded="true">☰ <span>Trái</span></button>
+      <button class="top-action layout-action" id="btn-toggle-right" title="Thu gọn/mở rộng bảng tác vụ" aria-label="Thu gọn bảng phải" aria-expanded="true">◫ <span>Phải</span></button>
       <button class="top-action" id="btn-refresh">⟳ <span>Làm mới</span></button>
       <button class="top-action" id="btn-update">↓ <span>Kiểm tra bản vá</span></button>
       <button class="top-action small" id="btn-settings">⚙</button>
-      <span id="version" class="version">v0.1.0</span>
+      <span id="version" class="version">v0.2.0</span>
     </div>
   </header>
   <aside class="sidebar">
     <div class="side-category">ĐIỀU HƯỚNG</div>
-    <button class="nav selected" data-target="dashboard"><span>▦</span> Tổng quan</button>
-    <button class="nav" data-target="projects"><span>▤</span> Dự án Android <em id="nav-count">0/3</em></button>
-    <button class="nav" data-target="emulators"><span>▯</span> Máy ảo</button>
-    <button class="nav" data-target="logs"><span>≡</span> Nhật ký hoạt động</button>
-    <button class="nav" data-target="settings"><span>⚙</span> Cài đặt</button>
+    <button class="nav selected" data-target="dashboard"><span>▦</span><span class="nav-label">Tổng quan</span></button>
+    <button class="nav" data-target="projects"><span>▤</span><span class="nav-label">Dự án Android</span> <em id="nav-count">0/3</em></button>
+    <button class="nav" data-target="emulators"><span>▯</span><span class="nav-label">Máy ảo</span></button>
+    <button class="nav" data-target="logs"><span>≡</span><span class="nav-label">Nhật ký hoạt động</span></button>
+    <button class="nav" data-target="settings"><span>⚙</span><span class="nav-label">Cài đặt</span></button>
     <div class="side-bottom">
       <div class="side-heading">TÀI NGUYÊN</div>
       <div class="stat-row"><span>Máy ảo đang chạy</span><b id="running-count">0 / 3</b></div>
@@ -36,18 +38,25 @@
   </aside>
   <main class="workspace" id="dashboard">
     <div class="pageheading"><div><p class="eyebrow">WORKSPACE / OVERVIEW</p><h1>Trung tâm xem trước Android</h1><p class="subtitle">Ba máy ảo độc lập. Một dự án cho mỗi màn hình. Đồng bộ với VS Code qua thư mục local.</p></div><div class="heading-actions"><button class="btn secondary" id="btn-check-adb">Kiểm tra ADB</button><button class="btn primary" id="btn-add-project">＋ Thêm dự án</button></div></div>
-    <section class="projects" id="projects">
-      <div class="section-heading"><div><h2>Quản lý dự án <span id="project-title-count" class="subcount">0 / 3</span></h2><p>Tối đa ba thư mục dự án Android Gradle hoặc Flutter.</p></div><span class="section-detail">Mỗi điện thoại ↔ một dự án</span></div>
+    <section class="projects folded" id="projects">
+      <div class="section-heading"><div><h2>Quản lý dự án <span id="project-title-count" class="subcount">0 / 3</span></h2><p>Tối đa ba thư mục dự án Android Gradle hoặc Flutter.</p></div><button class="btn secondary" id="btn-toggle-projects" aria-expanded="false">▾ Hiện danh sách</button></div>
       <div class="project-list" id="project-list"></div>
     </section>
     <div class="main-grid">
       <section class="emulators" id="emulators">
-        <div class="section-heading"><div><h2>Thiết bị xem trước <span class="subcount">3 thiết bị</span></h2><p>Màn hình Android thực qua ADB • Nhấn hoặc vuốt trực tiếp trên ảnh xem trước</p></div><div class="legend"><span class="dot green"></span> Đang chạy <span class="dot gray"></span> Chưa chạy</div></div>
+        <div class="section-heading preview-heading"><div><h2>Thiết bị xem trước <span class="subcount">3 thiết bị</span></h2><p>Chọn máy để phóng lớn • Tương tác trực tiếp bằng chuột • Mỗi máy gắn một dự án riêng</p></div>
+          <div class="preview-toolbar" role="group" aria-label="Chế độ xem trước">
+            <button class="view-btn active" data-view="all" aria-pressed="true">▦ 3 máy</button>
+            <button class="view-btn" data-view="0" aria-pressed="false">1</button>
+            <button class="view-btn" data-view="1" aria-pressed="false">2</button>
+            <button class="view-btn" data-view="2" aria-pressed="false">3</button>
+          </div></div>
+        <div class="preview-hint"><span class="dot green"></span> Ảnh thật qua ADB <span>•</span> <kbd>Esc</kbd> trở về chế độ 3 máy <span>•</span> Gập hai thanh bên để mở rộng preview</div>
         <div class="device-grid" id="device-grid"></div>
         <div class="device-foot">ⓘ Cần Android SDK + Emulator + ít nhất một AVD đã tạo. Thời gian dựng APK/Flutter phụ thuộc dự án và cấu hình PC.</div>
       </section>
-      <aside class="right-rail">
-        <section class="panel pipeline"><div class="section-heading compact"><h2>⚡ Build / Deploy / Sync</h2></div>
+      <aside class="right-rail" id="right-rail">
+        <section class="panel pipeline"><div class="section-heading compact"><h2>⚡ Build / Deploy / Sync</h2><button class="rail-close" id="btn-rail-close" title="Thu gọn bảng tác vụ" aria-label="Thu gọn bảng tác vụ">»</button></div>
           <div class="pipeline-steps"><div class="step"><span>01</span><b>File watcher</b><small>Phát hiện thay đổi</small></div><div class="arrow">↓</div><div class="step"><span>02</span><b>Incremental build</b><small>Gradle / Flutter</small></div><div class="arrow">↓</div><div class="step"><span>03</span><b>ADB deploy</b><small>Đẩy bản build lên thiết bị</small></div><div class="arrow">↓</div><div class="step"><span>04</span><b>Live preview</b><small>Ảnh màn hình cập nhật</small></div></div>
           <div class="pipeline-note"><b>Đồng bộ tự động</b><p>Watcher xử lý sau khoảng 220 ms. Build và cập nhật giao diện thực tế có thể mất nhiều giây.</p></div>
         </section>
@@ -57,12 +66,14 @@
           <div class="toggle-row"><div><strong>Auto build</strong><small>Tự build khi lưu file</small></div><label class="switch"><input type="checkbox" id="auto-build" checked/><span></span></label></div>
           <div class="toggle-row"><div><strong>Auto deploy</strong><small>Tự cài APK sau khi build</small></div><label class="switch"><input type="checkbox" id="auto-deploy" checked/><span></span></label></div>
           <div class="toggle-row"><div><strong>Live screenshot</strong><small>Hiển thị màn hình Android</small></div><label class="switch"><input type="checkbox" id="screenshots" checked/><span></span></label></div>
-          <div class="setting-foot">Tùy chọn được lưu tự động trên máy tính.</div>
+          <button class="btn secondary" id="btn-diagnostics" style="width:100%;margin-top:13px">⌁ Kiểm tra môi trường & VS Code</button>
+          <div id="diagnostics-output" class="diagnostics-output" hidden role="status"></div>
+          <div class="setting-foot">Tùy chọn được lưu tự động trên máy tính. Nếu không có AVD, hãy tạo trong Android Studio → Device Manager.</div>
         </section>
       </aside>
     </div>
     <section class="panel logs" id="logs"><div class="section-heading compact"><div><h2>▤ Log & Trạng thái hệ thống</h2><p>Nhật ký build, ADB, emulator và đồng bộ dự án</p></div><div class="log-actions"><select id="log-filter"><option value="all">Tất cả</option><option value="error">Lỗi</option><option value="success">Thành công</option></select><button id="clear-logs" class="btn subtle">Xóa hiển thị</button></div></div><div class="log-output" id="log-output" aria-live="polite"></div></section>
-    <footer class="footer"><span>▣ Baodroid 0.1.0</span><span>Chỉ chạy local • Không tải mã nguồn dự án lên máy chủ</span><a href="https://github.com/techzoneadapter-droid/baodroid" id="repo-link">GitHub ↗</a></footer>
+    <footer class="footer"><span>▣ Baodroid 0.2.0</span><span>Chỉ chạy local • Không tải mã nguồn dự án lên máy chủ</span><a href="https://github.com/techzoneadapter-droid/baodroid" id="repo-link">GitHub ↗</a></footer>
   </main>
 </div>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

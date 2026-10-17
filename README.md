@@ -4,7 +4,10 @@
 
 ![Build](https://github.com/techzoneadapter-droid/baodroid/actions/workflows/windows.yml/badge.svg)
 
-## Chức năng phiên bản 0.1.0
+## Chức năng phiên bản 0.2.0
+
+**Bản UX/UI 0.2.0:** Có thể thu gọn độc lập thanh điều hướng trái và bảng Build/Settings phải, ẩn/hiện danh sách dự án để ưu tiên màn hình Android, phóng lớn riêng máy 1/2/3, đặt zoom 75–150%, trở về cả 3 máy bằng phím Escape. Trên máy đang chạy có thao tác Home, Back, Xoay, và chụp PNG lưu ra ổ cứng. Nút kiểm tra môi trường báo tình trạng ADB, AVD, VS Code và Flutter. VS Code được tìm bằng đường dẫn cài đặt Windows tiêu chuẩn thay vì phụ thuộc CLI `code` trong PATH.
+
 
 - Giao diện desktop tối, ba khung điện thoại song song; chạy Android Emulator headless và hiển thị ảnh chụp màn hình qua ADB; click/vuốt ngay trên màn hình xem trước.
 - Liên kết **tối đa ba** dự án **Android Gradle (Kotlin/Java)** hoặc **Flutter**; mỗi AVD và mỗi dự án được gán duy nhất cho một vị trí.
@@ -22,11 +25,11 @@ Baodroid **không tạo Android Emulator từ số 0** và không đi kèm Andro
 ## Cài đặt Windows (.exe)
 
 1. Mở [GitHub Actions → Windows build & release](https://github.com/techzoneadapter-droid/baodroid/actions/workflows/windows.yml), chọn workflow chạy thành công của nhánh `main`.
-2. Tải artifact **Baodroid-Windows-Setup**, giải nén và mở `Baodroid-Setup-0.1.0.exe`.
+2. Tải artifact **Baodroid-Windows-Setup**, giải nén và mở `Baodroid-Setup-0.2.0.exe`.
 3. Chọn thư mục cài, thực hiện các bước cài đặt, mở Baodroid.
 4. Vì chưa có chứng chỉ ký mã Windows, SmartScreen có thể đưa ra cảnh báo. Chỉ chạy bản cài lấy từ repository mà bạn tin cậy.
 
-**GitHub Release:** Khi có tag tương ứng bản trong `package.json` (ví dụ `v0.1.0`), workflow sẽ tạo release chứa file `Baodroid-Setup-0.1.0.exe` và `latest.yml`. Chức năng tự cập nhật **chỉ** hoạt động với bản cài và release công khai trên GitHub. Artifact từ workflow nhánh `main` dùng để thử nghiệm, không tự biến thành một release cập nhật.
+**GitHub Release:** Với phiên bản 0.2.0, workflow trên nhánh `main` tạo release chứa bộ cài và file `latest.yml` sau khi CI thành công. Chức năng tự cập nhật **chỉ** hoạt động với bản cài và release công khai trên GitHub. Artifact từ workflow nhánh `main` dùng để thử nghiệm, không tự biến thành một release cập nhật.
 
 ## Chuẩn bị Android SDK
 
@@ -35,7 +38,7 @@ Baodroid **không tạo Android Emulator từ số 0** và không đi kèm Andro
 - Nếu cần thêm 2 máy ảo, hãy tạo AVD khác tên và tải Android system images. Baodroid dùng các cổng ADB `5554`, `5556` và `5558`; các cổng này phải trống.
 - Cài JDK phù hợp với dự án Android (thường JDK 17 hoặc phiên bản mà Android Gradle Plugin yêu cầu).
 - Để chạy Flutter, cài Flutter SDK và bảo đảm lệnh `flutter` dùng được trong `PATH`. Hỗ trợ React Native chưa có trong bản này.
-- Cài VS Code; để nút “VS” mở thư mục dễ dàng, bật lệnh `code` trong `PATH`.
+- Cài VS Code; Baodroid tìm VS Code trong thư mục cài đặt tiêu chuẩn (User hoặc System); nếu cài bản portable/vị trí khác, tính năng mở VS Code chưa hỗ trợ cấu hình thủ công.
 
 ## Khởi động
 
@@ -76,4 +79,4 @@ src/renderer/         HTML/CSS/JS giao diện, điều khiển Android
 
 **Lưu ý riêng tư:** Mã nguồn dự án Android vẫn ở đúng thư mục mà bạn lựa chọn; Baodroid đọc file và chạy công cụ cục bộ. Cấu hình nằm trong thư mục dữ liệu ứng dụng của Windows, không phải dự án GitHub.
 
-Bản 0.1.0 là **MVP**. Chưa kiểm thử end-to-end trên Windows với Android SDK/AVD thực trong môi trường xây dựng này; cần kiểm tra thực tế trên PC Windows trước khi coi là bản phát hành ổn định.
+Bản 0.2.0 là **MVP**. Chưa kiểm thử end-to-end trên Windows với Android SDK/AVD thực trong môi trường xây dựng này; cần kiểm tra thực tế trên PC Windows trước khi coi là bản phát hành ổn định.

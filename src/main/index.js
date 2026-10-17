@@ -1,5 +1,6 @@
 'use strict';
 const {app, BrowserWindow, ipcMain, dialog, shell} = require('electron');
+const fs = require('node:fs/promises');
 const path = require('node:path');
 const {Store} = require('./store');
 const {Engine} = require('./engine');
@@ -32,6 +33,17 @@ function registerHandlers() {
   register('tap', (slot,x,y) => engine.tap(slot,x,y));
   register('swipe', (slot,x1,y1,x2,y2,ms) => engine.swipe(slot,x1,y1,x2,y2,ms));
   register('check-adb', () => engine.checkAdb());
+  register('diagnostics', () => engine.diagnostics());
+  register('device-action', async (slot, action) => {
+    const result=await engine.deviceAction(slot,action);
+    if(action!=='screenshot') return result;
+    const chosen=await dialog.showSaveDialog(win,{
+      title:'Lưu ảnh màn hình Android',defaultPath:`Baodroid-Emulator-${slot+1}-${Date.now()}.png`,
+      filters:[{name:'PNG',extensions:['png']}]
+    });
+    if(chosen.canceled || !chosen.filePath) return null;
+    await fs.writeFile(chosen.filePath,result);return chosen.filePath;
+  });
   register('check-update', () => updater.check());
   register('download-update', () => updater.download());
   register('install-update', () => updater.install());
@@ -42,7 +54,7 @@ app.whenReady().then(async () => {
   updater = new UpdateManager(value => send('update-status', value));
   registerHandlers();
   win = new BrowserWindow({
-    width: 1650, height: 1060, minWidth: 1160, minHeight: 800, backgroundColor:'#0b1422',
+    width: 1650, height: 1060, minWidth: 960, minHeight: 720, backgroundColor:'#0b1422',
     title: 'Baodroid — Android Preview Hub', show: false,
     webPreferences: {preload:path.join(__dirname,'preload.js'), contextIsolation:true, nodeIntegration:false, sandbox:false, webSecurity:true}
   });
