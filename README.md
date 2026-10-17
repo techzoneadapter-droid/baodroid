@@ -1,31 +1,33 @@
-# Baodroid 0.4.0 — Android Preview Hub
+# Baodroid 0.5.0 — Android Preview & ChatGPT coding
 
-Baodroid là ứng dụng Windows đơn giản để **xem và kiểm tra tối đa ba dự án Android trực tiếp trên máy tính** trong khi sửa code bằng VS Code. Không cần điện thoại USB, không có dịch vụ cloud hay đồng bộ mã nguồn ra ngoài.
+Baodroid là ứng dụng desktop Windows giúp chạy và xem trước tối đa **ba ứng dụng Android**, đồng thời chỉnh sửa mã nguồn ngay bên dưới từng màn hình bằng **ChatGPT/Codex**. Không cần điện thoại USB.
 
-## Sử dụng
+## Dùng app
 
-1. Cài Android SDK (gồm `platform-tools/adb.exe` và `emulator/emulator.exe`) và tạo ít nhất một Android Virtual Device (AVD) qua Android Studio → Device Manager. Để chạy Android trên Windows vẫn cần một Android runtime thực.
-2. Mở Baodroid → **Thêm dự án** hoặc **Kết nối VS Code** trên vị trí 1/2/3 → chọn thư mục gốc dự án trên máy.
-3. Baodroid nhận diện Android Gradle, Flutter hoặc React Native (bao gồm bare Expo có thư mục `android/`), chọn AVD còn trống, tự khởi động Android ảo, build và cài ứng dụng.
-4. Sửa/lưu code trong VS Code; màn hình preview tự cập nhật theo framework: Flutter hot reload, React Native/Expo Metro Fast Refresh hoặc Gradle incremental build với Android native.
-5. Chọn **Máy 1/2/3** để phóng lớn. Chạm/vuốt chuột trực tiếp trên preview để kiểm tra tương tác.
+1. Cài Android SDK, Android Emulator và tạo tối thiểu một AVD trong Android Studio → Device Manager.
+2. Mở Baodroid, thêm dự án Gradle, Flutter hoặc React Native từ thư mục trên Windows. Baodroid tự gán AVD còn trống và chạy ứng dụng.
+3. Mỗi máy có nút **Kết nối ChatGPT**, chọn model và ô nhập prompt dưới màn hình.
+4. Đăng nhập ChatGPT qua trình duyệt bằng **Codex CLI chính thức**. Nếu Windows chưa cài Codex CLI, cài Node.js/npm rồi chạy một lần: `npm install -g @openai/codex`. Sau đó bấm lại Kết nối ChatGPT. Ứng dụng không lấy cookie hay mật khẩu đăng nhập của bạn.
+5. Gửi yêu cầu. Codex chạy tại **thư mục gốc dự án của riêng máy đó**, sửa file nguồn trực tiếp; watcher/hot reload/build của Baodroid tự làm mới preview.
+6. **Xem thay đổi** để so sánh nội dung trước/sau cho tối đa 12 file (bản xem trước giới hạn 2.500 ký tự mỗi phía). **Hoàn tác** để khôi phục thay đổi gần nhất nếu file chưa bị người dùng sửa tiếp.
 
-## React Native
+## Hệ thống AI
 
-Dự án cần có `package.json`, thư mục `android/` và `android/settings.gradle` (hoặc `.kts`). Dự án cần đã cài `node_modules` và máy Windows cần Node.js/npm. Baodroid chạy Metro trên `localhost:8081`, `8082`, `8083` theo từng vị trí và dùng ADB reverse để nối từng Android **emulator** tới Metro tương ứng. Đây là kết nối nội bộ máy tính ↔ máy ảo, *không phải USB*.
+- Tài khoản ChatGPT có thể được dùng chung để xác thực, nhưng **3 phiên chat và 3 workspace độc lập**. Các prompt không được đưa vào lịch sử của máy khác.
+- Codex được chạy với chế độ **workspace-write** và không tự yêu cầu tăng quyền. Không sử dụng chế độ bỏ qua sandbox.
+- Trước khi chỉnh code, Baodroid chụp snapshot tối đa 700 file nguồn (24MB) để có thể Undo. File bí mật, thư mục build, `node_modules`, `.git`... không được đưa vào snapshot.
+- ChatAI sẽ từ chối bắt đầu khi footprint quá lớn để không hứa hẹn hoàn tác thiếu an toàn.
+- Hoàn tác chỉ được thực hiện nếu các file vẫn y như lúc AI chỉnh xong, nhằm không ghi đè thay đổi mới của bạn. Chỉ lưu điểm hoàn tác gần nhất trong bộ nhớ phiên app, mất khi thoát.
+- Baodroid không thể cam kết AI chỉ đọc/sửa file phù hợp nếu sandbox Codex của hệ điều hành không được kích hoạt đúng. Nên sao lưu hoặc commit Git trước khi nhờ AI chỉnh dự án quan trọng.
+- Việc đăng nhập ChatGPT dùng **Codex CLI**, không phải tự động hóa trang ChatGPT. ChatGPT gói thuê bao và OpenAI API là hai cơ chế tính phí/quyền truy cập khác nhau. Các model trong menu có thể không được tài khoản cấp quyền; nếu lỗi, thử model khác.
 
-Sau lần build APK debug ban đầu, JS/TS thường chỉ dùng Fast Refresh; thay đổi mã Android native cần Gradle rebuild. Expo bare/development build được nhận diện; Expo Go managed-only chưa được hỗ trợ.
+## Android Preview
 
-## Yêu cầu và giới hạn
+- React Native/Expo bare: Metro Fast Refresh; Flutter: hot reload; Android Gradle: incremental build/deploy.
+- Baodroid chạy Android ảo trên Windows qua SDK và ADB. ADB là cầu nối đến emulator local, không yêu cầu cắm điện thoại.
+- Sửa code đến ảnh preview cập nhật không thể luôn dưới 0,5 giây vì thời gian build/hot reload phụ thuộc dự án.
 
-- Windows 10/11 x64; Android SDK/Android Emulator; tối thiểu một AVD có system image đã cài.
-- Mỗi máy ảo dùng CPU/RAM thật; chạy ba máy song song tùy thuộc phần cứng.
-- React Native: Node.js/npm và dependencies đã cài; Flutter: Flutter SDK; native Android: JDK và Gradle Wrapper.
-- Phát hiện sửa file có debounce khoảng 220 ms; **không bảo đảm quá trình biên dịch và preview cập nhật dưới 0,5 giây**.
-- Không cần cắm điện thoại và không dùng dịch vụ mạng để gửi mã nguồn. GitHub chỉ được sử dụng khi người dùng chủ động kiểm tra bản vá.
-- Nếu chưa có AVD, Baodroid báo yêu cầu tạo AVD trong Android Studio trước. Không tự tải system image (kích thước có thể nhiều GB).
-
-## Development
+## Development & release
 
 ```bash
 npm install
@@ -34,6 +36,6 @@ npm run check
 npm start
 ```
 
-GitHub Actions build bản cài Windows và phát hành kèm `latest.yml` để nút **Kiểm tra bản vá** cập nhật.
+GitHub Actions xây dựng file setup Windows x64 và phát hành `latest.yml` để nút **Kiểm tra bản vá** cập nhật.
 
 MIT License.

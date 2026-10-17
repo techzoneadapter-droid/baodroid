@@ -1,8 +1,8 @@
 {
   "name": "baodroid",
   "productName": "Baodroid",
-  "version": "0.4.0",
-  "description": "Minimal local Android emulator preview for VS Code, React Native, Flutter and Gradle projects on Windows",
+  "version": "0.5.0",
+  "description": "Local Windows Android emulator preview and isolated per-project ChatGPT Codex coding",
   "author": "Baodroid Contributors",
   "license": "MIT",
   "main": "src/main/index.js",
@@ -10,7 +10,7 @@
     "start": "electron .",
     "dev": "electron .",
     "test": "node --test tests/*.test.js",
-    "check": "node --check src/main/index.js && node --check src/main/engine.js && node --check src/main/process.js && node --check src/main/update.js && node --check src/main/vscode.js && node --check src/renderer/app.js",
+    "check": "node --check src/main/index.js && node --check src/main/engine.js && node --check src/main/process.js && node --check src/main/update.js && node --check src/main/vscode.js && node --check src/main/ai.js && node --check src/renderer/app.js && node --check src/renderer/ai-ui.js",
     "dist:win": "electron-builder --win nsis --publish never",
     "release:win": "electron-builder --win nsis --publish always"
   },

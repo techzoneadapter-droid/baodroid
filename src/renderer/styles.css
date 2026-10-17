@@ -105,3 +105,42 @@ footer{margin-top:auto;color:#6483a1;text-align:center;font-size:11px;padding:5p
  .header-right{gap:6px}
  .header-right .button{padding:8px}
 }
+
+/* Baodroid 0.5 - local AI coding workspace under each preview */
+.device-head{display:flex;flex-wrap:wrap;gap:8px}
+.device-head .ai-top-button{min-height:29px;font-size:10px;padding:6px 9px;flex:0 0 auto;max-width:100%}
+.ai-panel{margin-top:6px;display:flex;flex-direction:column;gap:10px;min-width:0;border:1px solid #315b78;background:#0b1d31;padding:12px;border-radius:11px}
+.ai-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.ai-head strong{display:block;font-size:13px;line-height:1.3}
+.ai-head small{display:block;color:#91b2cc;font-size:10px;margin-top:4px}
+.ai-connect{background:#1b527d;font-size:10px;padding:7px 9px;min-height:32px}
+.ai-model-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0;font-size:11px;color:#a7c7de}
+.ai-model-row label{font-weight:700}
+.ai-model{flex:1 1 100px;min-width:80px;max-width:180px;border:1px solid #3b5d7b;background:#102940;color:#e1f0ff;border-radius:7px;padding:7px 8px;font-size:11px}
+.ai-indicator{font-size:10px;color:#b8a775;white-space:nowrap}
+.ai-indicator.online{color:#68dbb1}
+.ai-history{display:flex;flex-direction:column;gap:8px;min-height:145px;max-height:245px;overflow:auto;background:#071626;border:1px solid #263f55;border-radius:8px;padding:8px}
+.ai-message{min-width:0;border-radius:8px;padding:9px 10px;background:#132f48;overflow-wrap:anywhere}
+.ai-message.user{background:#123d69}
+.ai-message strong{font-size:11px;color:#91d5ff}
+.ai-message p{white-space:pre-wrap;margin:5px 0 0;font-size:12px;color:#dae9f9;line-height:1.45}
+.ai-note,.ai-empty{font-size:11px;color:#87b1d0;line-height:1.5;white-space:pre-wrap;margin:7px 0}
+.ai-revisions{border:1px solid #2a5f69;border-radius:7px;background:#12343e;padding:9px;color:#91e9d1;font-size:11px;overflow-wrap:anywhere}
+.ai-revisions ul{padding-left:19px;margin:6px 0}
+.ai-revisions li{margin:4px 0}
+.ai-compose{display:flex;flex-direction:column;gap:9px}
+.ai-compose textarea{resize:vertical;min-height:76px;max-height:220px;width:100%;border-radius:8px;padding:10px;border:1px solid #395b77;outline:none;background:#0a2339;color:#eaf4ff;font:12px/1.55 'Segoe UI',Tahoma,Arial,sans-serif}
+.ai-compose textarea:focus{border-color:#369efa;box-shadow:0 0 0 2px #2967ad35}
+.ai-actions{display:flex;gap:5px;flex-wrap:wrap}
+.ai-actions .button{flex:1 1 auto;min-height:34px;padding:7px;font-size:11px}
+.ai-footnote{font-size:10px;color:#7194b2;line-height:1.5}
+.device-grid.focus .ai-panel{grid-column:1/-1;min-width:0}
+.device-grid.focus .ai-history{min-height:160px;max-height:280px}
+@media(max-width:1190px){.device-head{justify-content:flex-start}.device-head .ai-top-button{width:100%;justify-content:center}.ai-head .ai-connect{width:100%}}
+
+.ai-diff{margin-top:8px;border:1px solid #3a687d;border-radius:7px;overflow:hidden;background:#0a2638}
+.ai-diff summary{cursor:pointer;padding:8px 10px;font-size:11px;color:#d6edff}
+.ai-diff-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:8px}
+.ai-diff-columns strong{font-size:11px;color:#9ad6ef}
+.ai-diff-columns pre{max-height:230px;min-height:65px;overflow:auto;padding:7px;margin:5px 0 0;border:1px solid #33546b;border-radius:5px;background:#061725;color:#bcd7eb;font:10px/1.5 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:1000px){.ai-diff-columns{grid-template-columns:1fr}}

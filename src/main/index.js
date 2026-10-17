@@ -5,7 +5,8 @@ const path = require('node:path');
 const {Store} = require('./store');
 const {Engine} = require('./engine');
 const {UpdateManager} = require('./update');
-let win, engine, updater;
+const {AIManager} = require('./ai');
+let win, engine, updater, ai;
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
 function send(topic, data) { if (win && !win.isDestroyed()) win.webContents.send(topic, data); }
@@ -20,8 +21,14 @@ function registerHandlers() {
   });
   register('get-state', () => engine.snapshot());
   register('add-project', async () => { const folder = await chooseFolder({title:'Chọn thư mục dự án Android / Flutter / React Native'}); return folder ? engine.addProject(folder) : null; });
-  register('remove-project', (id) => engine.removeProject(id));
-  register('assign-project', (slot, projectId) => engine.assignProject(slot, projectId));
+  register('remove-project', (id) => {
+    for(let i=0;i<3;i++)if(engine.store.data.slots[i].projectId===id && ai.isBusy(i))throw new Error('AI đang sửa dự án này. Hãy dừng tác vụ trước khi xóa.');
+    return engine.removeProject(id);
+  });
+  register('assign-project', (slot, projectId) => {
+    if(ai.isBusy(slot))throw new Error('AI đang sửa code cho máy này. Hãy dừng tác vụ trước khi đổi dự án.');
+    return engine.assignProject(slot,projectId);
+  });
   register('assign-avd', (slot, avd) => engine.assignAvd(slot, avd));
   register('list-avds', () => engine.listAvds());
   register('choose-sdk', async () => { const folder = await chooseFolder({title:'Chọn thư mục Android SDK'}); return folder ? engine.configure({sdkPath: folder}) : null; });
@@ -30,6 +37,12 @@ function registerHandlers() {
   register('stop-slot', (slot) => engine.stopSlot(slot));
   register('reload-slot', (slot) => engine.reloadSlot(slot));
   register('open-vscode', (projectId) => engine.openVSCode(projectId));
+  register('ai-status', async slot => { await ai.checkAuth(); return ai.state(slot); });
+  register('ai-connect', slot => ai.connect(slot));
+  register('ai-send', (slot,prompt,model) => ai.send(slot,prompt,model));
+  register('ai-stop', slot => ai.stop(slot));
+  register('ai-undo', slot => ai.undo(slot));
+  register('ai-preview', slot => ai.previewChanges(slot));
   register('connect-vscode', async slot => {
     if (!Number.isInteger(slot) || slot<0 || slot>2) throw new Error('Máy ảo không hợp lệ.');
     let projectId = engine.store.data.slots[slot].projectId;
@@ -71,6 +84,7 @@ function registerHandlers() {
 app.whenReady().then(async () => {
   const store = new Store(app.getPath('userData'));
   engine = new Engine(store, send);
+  ai = new AIManager(engine,send);
   updater = new UpdateManager(value => send('update-status', value));
   registerHandlers();
   win = new BrowserWindow({
@@ -84,5 +98,5 @@ app.whenReady().then(async () => {
   win.webContents.setWindowOpenHandler(({url}) => { if (url.startsWith('https://github.com/techzoneadapter-droid/baodroid')) shell.openExternal(url); return {action:'deny'}; });
   engine.log('Baodroid sẵn sàng. Chọn thư mục dự án để tự chạy trong Android Emulator cục bộ.');
 });
-app.on('before-quit', () => { if (engine) engine.dispose(); });
+app.on('before-quit', () => { if (ai) ai.dispose(); if (engine) engine.dispose(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
