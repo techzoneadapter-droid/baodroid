@@ -50,3 +50,8 @@ Trong v0.8.0, sau khi ReelTara/CHƯƠNG đã bật chế độ Android native, b
 v0.8.1 dùng duy nhất `projectForSlot(slot)` cho cả khởi động và build: ReelTara web → Capacitor; CHƯƠNG Expo Web → React Native sau prebuild. Khi Android boot xong, Baodroid sẽ tự chạy Gradle, tìm APK, cài vào AVD và gửi lệnh mở ứng dụng. Giao diện hiển thị rõ **đang build APK / đang cài APK / build lỗi**. Khi build lỗi, bấm **Thử build & mở lại** (không cần cài SDK hoặc tạo AVD lần nữa). Nhật ký kỹ thuật lưu bước build/đường dẫn dự án chính xác.
 
 Bản vá sửa workflow build/deploy nhưng vẫn cần kiểm thử thực tế với dự án trên máy Windows. Gradle lần đầu có thể lâu và có thể thất bại do Java/Gradle/plugin, không có cam kết chạy thành công với mọi dự án.
+
+
+## v0.8.2 — Sửa trường hợp Android chỉ hiện màn hình Home
+
+Khi Android Emulator đã được công cụ sửa lỗi hoặc Android Studio mở trước trên cổng tương ứng, Baodroid sẽ dùng `adb emu avd name` xác minh đó **đúng AVD của vị trí preview**, kết nối lại và tiếp tục **Gradle build → ADB install → mở APK**. Không buộc người dùng đóng emulator, cài SDK lại hay gõ lệnh CMD. Không tự nhận một AVD khác đang dùng cùng cổng. Nếu build APK thất bại, xem Nhật ký kỹ thuật để xác định Gradle/JDK hay thư viện dự án. Cập nhật này chưa được xác nhận trên phần cứng Windows cụ thể.

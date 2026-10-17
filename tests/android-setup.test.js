@@ -50,8 +50,18 @@ test('Capacitor projects build APK from nested android/ gradle and read applicat
   assert.equal(readApplicationId(root,'capacitor'),'dev.baodroid.preview.reeltara');
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
-test('native mode bypasses Web Preview only for its own assigned slot',()=>{
- const eng=fs.readFileSync(path.join(__dirname,'../src/main/engine.js'),'utf8');
- assert.match(eng,/!assigned\.nativeMode && this\.webPreview/);
- assert.match(eng,/assigned\.nativeMode && original\.kind==='web'\?'capacitor'/);
+test('native mode maps web project to Capacitor without changing project record',()=>{
+ const {Engine}=require('../src/main/engine');
+ const data={projects:[{id:'p',name:'demo',path:'C:/demo',kind:'web'}],
+  slots:[{projectId:'p',avd:'Baodroid_Preview_1',nativeMode:true},{projectId:null},{projectId:null}],
+  settings:{sdkPath:''}};
+ const engine=new Engine({data,save(){}},()=>{});
+ const mapped=engine.projectForSlot(0);
+ assert.equal(mapped.kind,'capacitor');
+ assert.equal(data.projects[0].kind,'web');
+});
+test('already-running Android AVD name is parsed without the console OK suffix',()=>{
+ const {parseRunningAvdName}=require('../src/main/engine');
+ assert.equal(parseRunningAvdName('Baodroid_Preview_1\r\nOK\r\n'),'Baodroid_Preview_1');
+ assert.equal(parseRunningAvdName(''),'');
 });

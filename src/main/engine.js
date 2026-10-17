@@ -13,6 +13,9 @@ function chooseFreeAvd(names,slots,index) {
   const used = new Set(slots.filter((_,i)=>i!==index).map(s=>s.avd).filter(Boolean));
   return names.find(name=>!used.has(name)) || '';
 }
+function parseRunningAvdName(output) {
+  return String(output||'').split(/\r?\n/).map(s=>s.trim()).find(s=>s && s!=='OK') || '';
+}
 
 class Engine {
   constructor(store, emit) {
@@ -195,11 +198,30 @@ class Engine {
     const worker=this.workers[slot], serial=this.devices[slot].serial;
     if (this.devices.some((d,i)=>i!==slot && d.status!=='off' && this.store.data.slots[i].avd===assigned.avd)) throw new Error('AVD đang được sử dụng.');
     const list=await exec(this.tools().adb,['devices'],{timeout:10000});
-    if (list.stdout.includes(serial+'\t')) throw new Error(`Cổng ${serial} đang bận. Hãy đóng emulator bên ngoài Baodroid.`);
+    const occupied=list.stdout.split(/\r?\n/).some(line=>line.startsWith(serial+'\t'));
+    let attach=false;
+    if(occupied) {
+      // A recovery script may have booted this exact AVD already.
+      // Check its identity to avoid installing the wrong project's APK.
+      let found='';
+      try {
+        const response=await exec(this.tools().adb,['-s',serial,'emu','avd','name'],{timeout:8000});
+        found=parseRunningAvdName(response.stdout);
+      }catch(e) {
+        throw new Error(`Android đang sử dụng ${serial} nhưng Baodroid chưa xác minh được tên AVD: ${e.message}`);
+      }
+      if(found!==assigned.avd)throw new Error(`Cổng ${serial} đang chạy AVD ${found||'không xác định'}, không phải ${assigned.avd}. Đã ngăn cài nhầm ứng dụng.`);
+      attach=true;
+    }
     const generation=++worker.generation;
-    this.update(slot,{status:'booting',previewMode:'android',webUrl:null,build:'idle',message:'Đang khởi động Android Emulator thật…',lastSync:null});
-    this.log(`Khởi động ${assigned.avd} cho ${project.name} (${serial}).`,'info',slot);
+    this.update(slot,{status:'booting',previewMode:'android',webUrl:null,build:'idle',message:attach?'Đã nhận Android đang chạy. Đang chuẩn bị APK…':'Đang khởi động Android Emulator thật…',lastSync:null});
+    this.log(attach?`Đã kết nối lại AVD ${assigned.avd} trên ${serial}. Đang tự build/cài/mở ${project.name}.`:`Khởi động ${assigned.avd} cho ${project.name} (${serial}).`,'info',slot);
     try {
+      if(attach) {
+        worker.emulator=null;
+        void this.boot(slot,generation,project).catch(error=>{if(worker.generation===generation)this.fail(slot,error);});
+        return {status:'booting',serial,attached:true};
+      }
       worker.emulator=launch(this.tools().emulator,['-avd',assigned.avd,'-port',String(5554+slot*2),'-no-window','-no-audio','-no-boot-anim','-netdelay','none','-netspeed','full'],{
         onLine:line => {if (/ERROR|PANIC|failed/i.test(line)) this.log(line,'error',slot);}
       });
@@ -556,4 +578,4 @@ class Engine {
     }
   }
 }
-module.exports={Engine,chooseFreeAvd};
+module.exports={Engine,chooseFreeAvd,parseRunningAvdName};
