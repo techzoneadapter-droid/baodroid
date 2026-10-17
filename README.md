@@ -60,3 +60,14 @@ Khi Android Emulator đã được công cụ sửa lỗi hoặc Android Studio 
 ## v0.8.3: Sửa kết nối & mở app
 
 Nếu SDK/AVD đã tạo nhưng máy Android chỉ hiện màn hình Home, nhấn nút **Sửa kết nối & mở app** dưới dự án ở chế độ Android native. Baodroid tự tìm AVD đúng theo tên trên mọi cổng ADB, nhận emulator bên ngoài mà không đóng nó, hoặc chọn cổng trống để khởi động AVD, sau đó tự chạy Gradle → cài APK → mở ứng dụng. Nếu Android đang chạy nhưng Gradle lỗi, nút sẽ build lại mà không cài SDK hay reset dữ liệu AVD. Lỗi được hiển thị dưới preview và mở Nhật ký kỹ thuật, đồng thời lưu tại thư mục dữ liệu Baodroid trong file `baodroid-runtime.log`. Nếu một emulator thuộc dự án khác đang dùng cổng mặc định, Baodroid sẽ thử cổng còn trống, không ghi đè AVD khác. Android Emulator và build native trên Windows yêu cầu cấu hình JDK/Gradle phù hợp, nên nút sửa không thể đảm bảo vượt qua lỗi phụ thuộc trong mã dự án.
+
+
+## v0.8.4 — Khắc phục Gradle gọi sai đường dẫn và build lặp vô hạn
+
+- Windows: Baodroid chạy Gradle Wrapper trực tiếp qua Java (`org.gradle.wrapper.GradleWrapperMain`) và JAR đi kèm trong dự án, không gọi đường dẫn `gradlew.bat` tuyệt đối qua `cmd.exe / shell:true`. Đây là cách tránh lỗi kiểu `'D:\\?' is not recognized` khi thư mục chứa ký tự đặc biệt, khoảng trắng hoặc dấu tiếng Việt. JDK phải tồn tại; ưu tiên `JAVA_HOME` và Android Studio JBR.
+- Capacitor/Vite: chỉ theo dõi thư mục source và cấu hình, **không theo dõi thư mục android** do `cap sync`/Gradle sinh ra; tránh vòng lặp rebuild sau khi build.
+- EPERM từ watcher không còn spam log liên tục; chỉ báo lỗi khi thay đổi trạng thái.
+- Nếu Gradle thất bại, Baodroid hiển thị lỗi rồi dừng vòng build tự động. Chỉ bắt đầu lại khi người dùng bấm **Sửa kết nối & mở app** hoặc lưu thay đổi file nguồn thực sự.
+- Không cần xóa Android SDK, AVD hay project. Khi cập nhật, thử ReelTara trước; lần build Android đầu tiên có thể mất vài phút.
+
+Giới hạn: CI Windows kiểm tra chức năng và tạo setup; chưa chạy Gradle/Capacitor của ReelTara trên máy Windows của bạn. Nếu dự án thiếu `gradle-wrapper.jar` hoặc cần JDK khác, phần nhật ký sẽ nêu lỗi cụ thể.

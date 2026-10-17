@@ -7,6 +7,7 @@ const {spawn} = require('node:child_process');
 const {detectProject, readApplicationId, gradleRoot, findDebugApk} = require('../shared/project');
 const {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand} = require('./process');
 const {findVSCode, openVSCodeFolder} = require('./vscode');
+const {watchTargets,shouldSyncChange} = require('./watch-rules');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const isSlot = i => Number.isInteger(i) && i >= 0 && i <= 2;
 function chooseFreeAvd(names,slots,index) {
@@ -369,9 +370,15 @@ class Engine {
   watch(slot, project) {
     const worker=this.workers[slot];
     const ignored=(p)=> /(^|[\\/])(\.git|\.gradle|\.dart_tool|\.idea|node_modules|build|dist|\.next|\.expo|\.vscode)([\\/]|$)/i.test(p);
-    worker.watcher=chokidar.watch(project.path,{ignoreInitial:true,ignored,awaitWriteFinish:{stabilityThreshold:140,pollInterval:50},depth:12});
+    const targets=watchTargets(project);
+    if(!targets.length){
+      this.log('Chưa tìm thấy thư mục source để theo dõi. Baodroid vẫn có thể build thủ công.','warn',slot);
+      return;
+    }
+    worker.watcher=chokidar.watch(targets,{ignoreInitial:true,ignored,awaitWriteFinish:{stabilityThreshold:250,pollInterval:80},depth:12});
     worker.watcher.on('all',(event,file)=>{
       if (!['add','change','unlink'].includes(event) || this.devices[slot].status!=='running') return;
+      if(!shouldSyncChange(project,file))return;
       clearTimeout(worker.debounce);
       worker.debounce=setTimeout(()=>{
         if (!this.store.data.settings.autoBuild) return;
@@ -389,7 +396,12 @@ class Engine {
         else this.restartFlutter(slot,project);
       },220);
     });
-    worker.watcher.on('error', e=>this.log('File watcher: '+e.message,'error',slot));
+    let lastErrorAt=0;
+    worker.watcher.on('error', e=>{
+      if(Date.now()-lastErrorAt<30000)return;
+      lastErrorAt=Date.now();
+      this.log('Theo dõi source bị giới hạn: '+e.message+'. Vẫn có thể build thủ công.','warn',slot);
+    });
   }
   startMetro(slot,project,generation) {
     const worker=this.workers[slot];
@@ -480,7 +492,14 @@ class Engine {
         const project=this.projectForSlot(slot);
         this.log('Build ứng dụng '+project.name+' (loại '+project.kind+') cho máy '+(slot+1)+'.','info',slot);
         try {await this.buildNative(slot,project,generation,mustDeploy);}
-        catch(e) {this.failBuild(slot,e);}
+        catch(e) {
+          // Generated build files must not start a new cycle after a failure.
+          // Wait for an explicit source edit or the user's Retry button.
+          worker.dirty=false;
+          worker.manuallyDeploy=false;
+          this.failBuild(slot,e);
+          break;
+        }
       }
     } finally {worker.busy=false;}
   }
@@ -503,7 +522,7 @@ class Engine {
       let lastReported=0;
       const args=[':app:assembleDebug','--build-cache','--max-workers=2','--console=plain'];
       if(project.kind==='react-native')args.push('-PreactNativeDevServerPort='+String(8081+slot));
-      const child=launch(gradle.cmd,args,{
+      const child=launch(gradle.cmd,[...gradle.preArgs,...args],{
         cwd:base,shell:gradle.shell,onLine:line=>{
           recent.push(String(line).slice(0,350));
           if(recent.length>25)recent.shift();

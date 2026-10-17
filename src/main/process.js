@@ -63,9 +63,22 @@ function stopProcess(child) {
     killer.on('error', () => {});
   } else child.kill('SIGTERM');
 }
-function gradleCommand(root) {
-  const cmd = path.join(root, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
-  if (!fs.existsSync(cmd)) throw new Error('Không tìm thấy Gradle Wrapper (gradlew/gradlew.bat).');
-  return {cmd, shell: process.platform === 'win32'};
+function gradleCommand(root, environment=process.env, platform=process.platform) {
+  const wrapper=path.join(root,platform==='win32'?'gradlew.bat':'gradlew');
+  if(!fs.existsSync(wrapper))throw new Error('Không tìm thấy Gradle Wrapper (gradlew/gradlew.bat).');
+  if(platform!=='win32')return {cmd:wrapper,shell:false,preArgs:[],cwd:root};
+  // Windows CMD with shell:true incorrectly parses absolute paths containing
+  // spaces, Unicode and special characters. Invoke the SAME Gradle wrapper JAR
+  // directly through Java, avoiding cmd.exe and gradlew.bat quoting entirely.
+  const jar=path.join(root,'gradle','wrapper','gradle-wrapper.jar');
+  if(!fs.existsSync(jar))throw new Error('Thiếu gradle/wrapper/gradle-wrapper.jar trong dự án Android.');
+  const roots=[
+    environment.JAVA_HOME,
+    environment.ProgramFiles&&path.join(environment.ProgramFiles,'Android','Android Studio','jbr'),
+    environment.LOCALAPPDATA&&path.join(environment.LOCALAPPDATA,'Programs','Android Studio','jbr'),
+    environment.PROGRAMFILES&&path.join(environment.PROGRAMFILES,'Android','Android Studio','jbr')
+  ].filter(Boolean);
+  const java=roots.map(dir=>path.join(dir,'bin','java.exe')).find(p=>fs.existsSync(p))||'java';
+  return {cmd:java,shell:false,preArgs:['-Dorg.gradle.appname=gradlew','-classpath',jar,'org.gradle.wrapper.GradleWrapperMain'],cwd:root};
 }
 module.exports = {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand, splitLines};
