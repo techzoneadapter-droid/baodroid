@@ -133,3 +133,16 @@ Nếu suốt 55 giây ADB không đăng ký bất kỳ serial nào của máy đ
 - Giữ nguyên giao diện ba máy Preview Hub, ChatGPT, VS Code và chức năng cập nhật của bản v0.9.3.
 
 **Cần kiểm tra trên máy thật:** CI Windows không thể chạy máy ảo có tăng tốc GPU. Nếu v0.9.4 vẫn không khởi động được AVD, vui lòng dùng Nhật ký kỹ thuật và log khởi động chi tiết mới; không nên tiếp tục cài lại Android SDK hoặc thay đổi timeout vô điều kiện. Tham khảo hướng dẫn đồ hoạ của Android: https://developer.android.com/studio/run/emulator-acceleration
+
+
+## v0.9.5 — Tích hợp cơ chế quản lý máy ảo mã nguồn mở Androidbox
+
+Nguồn tham khảo: [Wolklaw/Androidbox](https://github.com/Wolklaw/Androidbox), MIT, có lưu giấy phép tại [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Androidbox là giao diện Windows quản lý Google Android Emulator, không phải một hypervisor khác. Baodroid đã **chuyển phần quản lý vòng đời máy ảo** từ Androidbox sang JavaScript và dùng trên Windows cùng SDK hiện có. Đây không phải cài thêm trình giả lập thứ hai hoặc nhúng toàn bộ Python UI.
+
+- Tạo `src/main/androidbox-runtime.js` để thăm dò trực tiếp **console TCP của QEMU**, đọc dấu hiệu **AVD hardware-qemu.ini.lock**, kiểm tra đường dẫn AVD, khả năng quick boot và tạo môi trường `ANDROID_HOME/ANDROID_SDK_ROOT` trỏ tới SDK mà Baodroid đã cấu hình.
+- Không phụ thuộc hoàn toàn vào `adb devices`: nếu QEMU đã mở cổng console nhưng ADB chưa nhận thiết bị, Baodroid tiếp tục đợi trong ngân sách boot 150 giây và hiển thị **QEMU đang chạy / ADB chưa sẵn sàng**, thay vì luôn dừng sau 55 giây.
+- Nếu QEMU chưa mở cổng và ADB không xuất hiện sau 55 giây, Baodroid dừng thử sớm với log console/AVD/đồ họa, không khởi động vô hạn hoặc xoá lock/AVD. Có fallback GPU host với cửa sổ emulator như trước.
+- `-no-metrics` giảm công việc bên ngoài không cần thiết. Ba preview độc lập, Web Preview, Gradle/Capacitor, VS Code, ChatGPT, auto-update và UI v0.9.4 vẫn giữ nguyên.
+- `scrcpy` được đánh giá nhưng **chưa đưa vào bản vá này**, vì scrcpy chỉ truyền hình ảnh từ Android đã chạy; nó không thể khắc phục VM chưa xuất hiện trong ADB.
+
+**Giới hạn kiểm chứng:** GitHub Actions chạy tests và đóng gói Windows, nhưng không thể xác thực khởi động QEMU/WHPX trên máy người dùng. Nếu firmware/driver hoặc AVD hỏng, không thư viện Node/Python nào bảo đảm boot được. Hãy xem trạng thái QEMU/ADB mới trước khi thực hiện lần sửa sâu tiếp theo.

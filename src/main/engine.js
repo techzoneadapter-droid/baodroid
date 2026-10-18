@@ -9,6 +9,7 @@ const {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand, findNodeS
 const {apkDetails,packageInstalled,launchSucceeded,launcherComponent}=require('./apk-launch');
 const {ensureGradleWrapper}=require('./gradle-repair');
 const {findFreeEmulatorPort}=require('./emulator-ports');
+const {emulatorEnvironment,emulatorHealth,diagnostics}=require('./androidbox-runtime');
 const {findVSCode, openVSCodeFolder} = require('./vscode');
 const {watchTargets,shouldSyncChange} = require('./watch-rules');
 const {BOOT_TIMEOUT_MS,ADB_DISCOVERY_TIMEOUT_MS,gpuForAttempt,emulatorLaunchArgs,accelerationMessage,bootReport}=require('./boot-policy');
@@ -311,7 +312,7 @@ class Engine {
     this.devices[slot].serial=runningSerial;
     const generation=++worker.generation;
     worker.attached=Boolean(attachedSerial);
-    worker.lastEmulatorLines=[];
+    worker.lastEmulatorLines=[];worker.lastConsoleStatus='';
     this.update(slot,{status:'booting',previewMode:'android',webUrl:null,build:'idle',
       message:attachedSerial?'Đã tìm thấy Android đang chạy. Đang chuẩn bị cài ứng dụng…':'Đang khởi động Android Emulator thật…',
       lastSync:null});
@@ -327,7 +328,8 @@ class Engine {
       const gpu=gpuForAttempt(worker.gpuAttempt);
       this.log('Khởi động AVD: GPU '+gpu+', Vulkan tắt, '+(worker.gpuAttempt===0?'chạy ẩn':'mở cửa sổ dự phòng')+'.','info',slot);
       worker.emulator=launch(this.tools().emulator,
-        [...emulatorLaunchArgs({avd:assigned.avd,port,attempt:worker.gpuAttempt}),'-verbose'],{
+        [...emulatorLaunchArgs({avd:assigned.avd,port,attempt:worker.gpuAttempt}),'-no-metrics','-verbose'],{
+        env:emulatorEnvironment(this.store.data.settings.sdkPath),
         onLine:line=>{
           worker.lastEmulatorLines.push(String(line).slice(-450));
           if(worker.lastEmulatorLines.length>120)worker.lastEmulatorLines.shift();
@@ -352,10 +354,26 @@ class Engine {
   async boot(slot,generation,project) {
     const started=Date.now();
     const assigned=this.store.data.slots[slot];
-    let ready=false,seen=false,adbState='not listed',lastError='',lastProgress=0;
+    let ready=false,seen=false,consoleSeen=false,adbState='not listed',lastError='',lastProgress=0;
+    let lastHealthAt=-10000,healthReport='';
     while(Date.now()-started<BOOT_TIMEOUT_MS) {
       if(this.closed||this.workers[slot].generation!==generation)return;
       const elapsed=Date.now()-started;
+      if(elapsed-lastHealthAt>=5000){
+        lastHealthAt=elapsed;
+        const port=Number(this.devices[slot].serial.replace('emulator-',''));
+        try{
+          const health=await emulatorHealth({avd:assigned.avd,port});
+          consoleSeen=consoleSeen||health.consoleReady;
+          healthReport=diagnostics(health);
+          if(health.consoleReady&&!seen)adbState='console ready, ADB pending';
+          if(elapsed>9000&&!seen&&(!this.workers[slot].lastConsoleStatus||
+              this.workers[slot].lastConsoleStatus!==healthReport)){
+            this.log(healthReport,'info',slot);
+            this.workers[slot].lastConsoleStatus=healthReport;
+          }
+        }catch(error){healthReport='Không đọc được trạng thái emulator: '+error.message;}
+      }
       try{
         // Check registration first rather than repeatedly targeting a serial
         // which may not exist at all. Probe other emulator ports by AVD name.
@@ -391,13 +409,14 @@ class Engine {
           }
         }else adbState=observed.length?'other AVD / port not ready':'not listed';
       }catch(error){lastError=error.message;adbState='ADB connection error';}
-      if(!seen && elapsed>=ADB_DISCOVERY_TIMEOUT_MS){
+      if(!seen && !consoleSeen && elapsed>=ADB_DISCOVERY_TIMEOUT_MS){
         // Diagnose the real emulator child output, instead of treating all
         // failures to register in ADB as merely an ADB connection problem.
         const recent=this.workers[slot].lastEmulatorLines||[];
         const useful=recent.filter(x=>/error|fail|cannot|panic|exception|graphics|renderer|vulkan|qemu|WHPX/i.test(x)
           && !/crashpad_annotations|module_list\[/i.test(x)).slice(-4);
-        const details=useful.length?useful.join(' | ').slice(-480):'Không thấy lỗi cụ thể từ emulator. Kiểm tra cổng/GPU hoặc phiên bản AVD.';
+        const details=useful.length?useful.join(' | ').slice(-480):healthReport||
+          'Không thấy lỗi cụ thể từ emulator. Kiểm tra cổng/GPU hoặc phiên bản AVD.';
         this.log('AVD '+assigned.avd+' chưa đăng ký ADB; GPU='+gpuForAttempt(this.workers[slot].gpuAttempt)+
           '; '+details,'error',slot);
         throw new Error(bootReport({waitedMs:elapsed,adbState,
@@ -406,16 +425,17 @@ class Engine {
       }
       if(elapsed-lastProgress>=14000){
         lastProgress=elapsed;
-        const limit=seen?BOOT_TIMEOUT_MS:ADB_DISCOVERY_TIMEOUT_MS;
+        const limit=seen||consoleSeen?BOOT_TIMEOUT_MS:ADB_DISCOVERY_TIMEOUT_MS;
         const message='Android: '+Math.round(elapsed/1000)+'/'+Math.round(limit/1000)+
-          ' giây · ADB '+adbState+' · '+this.devices[slot].serial;
+          ' giây · ADB '+adbState+(consoleSeen?' · QEMU đang chạy':'')+' · '+this.devices[slot].serial;
         this.update(slot,{message});
         this.log(message,'info',slot);
       }
       await sleep(1800);
     }
-    if(!ready)throw new Error(bootReport({waitedMs:Date.now()-started,adbState,lastError,
-      serial:this.devices[slot].serial,seen}));
+    if(!ready)throw new Error(bootReport({waitedMs:Date.now()-started,adbState,
+      lastError:[lastError,healthReport].filter(Boolean).join(' | ').slice(-550),
+      serial:this.devices[slot].serial,seen,consoleReady:consoleSeen}));
     if (this.workers[slot].generation!==generation) return;
     this.workers[slot].bootedAt=Date.now();
     this.workers[slot].recoveryAttempts=0;

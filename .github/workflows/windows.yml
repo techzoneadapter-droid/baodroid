@@ -75,5 +75,5 @@ jobs:
           if (-not ($assets.Name -match '^Baodroid-Setup-.*\.exe$')) { throw "Missing NSIS installer" }
           if (-not ($assets.Name -contains 'latest.yml')) { throw "Missing latest.yml updater metadata" }
           $paths = @($assets | ForEach-Object { $_.FullName })
-          gh release create $tag @paths --target main --title "Baodroid $tag" --notes 'AVD startup diagnostics and GPU recovery: prefer host GPU headless based on previously successful host rendering, check console and ADB ports before launch, fallback to visible emulator once, preserve all projects and settings.'
+          gh release create $tag @paths --target main --title "Baodroid $tag" --notes 'Integrate MIT-licensed Androidbox emulator management approach: inspect live QEMU console, AVD ownership lock, startup environment and ADB readiness independently; preserve existing projects and Preview Hub.'
           if ($LASTEXITCODE -ne 0) { throw "Release upload failed" }

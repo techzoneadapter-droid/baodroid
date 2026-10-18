@@ -25,9 +25,10 @@ function accelerationMessage(code,stdout='',stderr=''){
  return 'Tăng tốc Android Emulator chưa khả dụng trên Windows. '+result.trim().replace(/\s+/g,' ').slice(-420)+
    '. Hãy kiểm tra Windows Hypervisor Platform (WHPX), sau đó khởi động lại Windows nếu vừa bật tính năng.';
 }
-function bootReport({booted=false,waitedMs=0,adbState='unknown',lastError='',serial='',seen=false}={}){
+function bootReport({booted=false,waitedMs=0,adbState='unknown',lastError='',serial='',seen=false,consoleReady=false}={}){
  if(booted)return 'Android đã khởi động và sẵn sàng cài APK.';
  const state=seen?'Android đã được ADB nhận diện nhưng chưa boot xong.':
+   consoleReady?'QEMU đã mở cổng console, nhưng Android chưa xuất hiện trong ADB.':
    'ADB không phát hiện thiết bị Android '+(serial||'')+' sau khi khởi động AVD.';
  return state+' Đã chờ '+Math.round(waitedMs/1000)+' giây (ADB: '+adbState+'). '+
    (lastError?'Chi tiết: '+lastError.slice(-260)+'. ':'')+
