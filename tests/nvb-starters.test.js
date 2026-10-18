@@ -37,6 +37,7 @@ test('requires two project slots before creating anything',()=>{
  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),'nvb-slots-'));
  try{
  const engine=mock();engine.store.data.projects.push({id:'existing',path:path.join(tmp,'Other'),name:'Other'});
+ engine.store.data.projects.push({id:'existing2',path:path.join(tmp,'Other2'),name:'Other2'});
  assert.throws(()=>createNvbStarterProjects(engine,tmp),/vị trí dự án còn trống/);
  assert.equal(fs.existsSync(path.join(tmp,'NVB_IAA_Apps')),false);
  }finally{fs.rmSync(tmp,{recursive:true,force:true});}

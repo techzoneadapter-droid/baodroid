@@ -92,7 +92,7 @@ function render(){
  $('project-count').textContent=state.config.projects.length+' / 3 dự án';
  updateSidebar();
  $('btn-add-project').disabled=state.config.projects.length>=3;
- $('btn-create-nvb').disabled=state.config.projects.length>1;
+ $('btn-create-nvb').disabled=state.config.projects.length>=3;
  const grid=$('device-grid');
  for(let i=0;i<3;i++){
    const slot=state.config.slots[i]||{};
