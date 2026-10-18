@@ -9,6 +9,7 @@ const {AIManager} = require('./ai');
 const {WebPreviewManager} = require('./web-preview');
 const {AndroidSetup} = require('./android-setup');
 const {NativeProjectPreparation} = require('./native-project');
+const {createNvbStarterProjects} = require('./nvb-starters');
 let win, engine, updater, ai, webPreview, androidSetup, nativeProject;
 if (!app.requestSingleInstanceLock()) app.quit();
 else app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus(); } });
@@ -23,6 +24,7 @@ function registerHandlers() {
     catch (error) { engine.log(`Lỗi: ${error.message}`, 'error'); return {ok:false, error: error.message}; }
   });
   register('get-state', () => engine.snapshot());
+  register('create-nvb-starters', () => createNvbStarterProjects(engine, app.getPath('documents')));
   register('add-project', async () => { const folder = await chooseFolder({title:'Chọn thư mục dự án Android / Flutter / React Native'}); return folder ? engine.addProject(folder) : null; });
   register('remove-project', (id) => {
     for(let i=0;i<3;i++)if(engine.store.data.slots[i].projectId===id && ai.isBusy(i))throw new Error('AI đang sửa dự án này. Hãy dừng tác vụ trước khi xóa.');

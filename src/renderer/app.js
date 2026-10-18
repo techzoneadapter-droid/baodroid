@@ -92,6 +92,7 @@ function render(){
  $('project-count').textContent=state.config.projects.length+' / 3 dự án';
  updateSidebar();
  $('btn-add-project').disabled=state.config.projects.length>=3;
+ $('btn-create-nvb').disabled=state.config.projects.length>1;
  const grid=$('device-grid');
  for(let i=0;i<3;i++){
    const slot=state.config.slots[i]||{};
@@ -341,6 +342,10 @@ function showUpdate(info){
 }
 function bind(){
  setupSidebars();
+ $('btn-create-nvb').addEventListener('click',async()=>{
+   const result=await invoke('createNvbStarters');
+   if(result){notify('Đã tạo '+result.created.length+' dự án NVB trong '+result.folder+'. Chọn Cài thư viện ở từng máy để chạy preview.');await refresh();}
+ });
  $('btn-add-project').addEventListener('click',async()=>{
    const result=await invoke('addProject');
    if(result)notify('Đã thêm thư mục dự án. Baodroid đang tự nhận diện cách chạy phù hợp.');

@@ -146,3 +146,10 @@ Nguồn tham khảo: [Wolklaw/Androidbox](https://github.com/Wolklaw/Androidbox)
 - `scrcpy` được đánh giá nhưng **chưa đưa vào bản vá này**, vì scrcpy chỉ truyền hình ảnh từ Android đã chạy; nó không thể khắc phục VM chưa xuất hiện trong ADB.
 
 **Giới hạn kiểm chứng:** GitHub Actions chạy tests và đóng gói Windows, nhưng không thể xác thực khởi động QEMU/WHPX trên máy người dùng. Nếu firmware/driver hoặc AVD hỏng, không thư viện Node/Python nào bảo đảm boot được. Hãy xem trạng thái QEMU/ADB mới trước khi thực hiện lần sửa sâu tiếp theo.
+
+
+## v0.9.6 — Tạo nhanh 2 dự án mẫu NVB
+
+Nếu danh sách dự án chưa có **Neon Arrow** và **WavePlay**, nhấn **✦ Tạo 2 dự án NVB**. Baodroid sao chép hai template Vite/Capacitor-preview từ chính bộ cài vào `Documents/NVB_IAA_Apps/NeonArrow` và `Documents/NVB_IAA_Apps/WavePlay`, sau đó gắn chúng vào các slot trống. Cần có ít nhất **2 slot dự án trống**. Nếu đã tồn tại dữ liệu ở thư mục đích mà không phải template do Baodroid tạo, ứng dụng từ chối ghi đè.
+
+Hai template là giao diện/prototype tương tác. Chọn **Cài thư viện** ở từng máy để cài Vite và chạy Web Preview. Muốn xem APK Android trong emulator, nhấn **Khởi tạo Android SDK & AVD** và xác nhận cài Capacitor. Việc này có thể mất nhiều phút và cần SDK, Gradle, JDK. Các ứng dụng mẫu **chưa tích hợp AdMob/Meta**, không phải sản phẩm phát hành. Cập nhật Baodroid không tự động thêm dự án hoặc sửa các thư mục đã có nếu người dùng không chọn tạo.
