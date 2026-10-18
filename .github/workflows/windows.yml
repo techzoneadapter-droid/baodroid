@@ -75,5 +75,5 @@ jobs:
           if (-not ($assets.Name -match '^Baodroid-Setup-.*\.exe$')) { throw "Missing NSIS installer" }
           if (-not ($assets.Name -contains 'latest.yml')) { throw "Missing latest.yml updater metadata" }
           $paths = @($assets | ForEach-Object { $_.FullName })
-          gh release create $tag @paths --target main --title "Baodroid $tag" --notes "Baodroid 0.9.0: Preview-first streamlined UX, collapsed per-project ChatGPT panels, Vulkan-disabled SwiftShader startup, visible host GPU fallback for repeated Windows 0xC0000005 crashes, and clear actionable errors."
+          gh release create $tag @paths --target main --title "Baodroid $tag" --notes "Baodroid 0.9.1: Restored classic Preview Hub UI with collapsible left navigation and right build/deploy panel; robust Vite/Capacitor diagnostics, APK-manifest-based package launch, preserved existing workflows."
           if ($LASTEXITCODE -ne 0) { throw "Release upload failed" }

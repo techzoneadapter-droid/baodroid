@@ -6,7 +6,7 @@ let state={config:{projects:[],slots:[{},{},{}],settings:{}},devices:[],logs:[]}
 let previewBySlot={};
 let avds=[];
 let view='all';
-let pinnedView=false;
+let pinnedView=true; // Show the original 3-phone layout by default; users may focus a slot.
 const preparingSlots=[false,false,false];
 const renderedKeys=['','',''];
 let logs=[];
@@ -32,7 +32,8 @@ const webKind=kind=>kind==='web'||kind==='expo-web';
 const safePreviewURL=url=>/^http:\/\/127\.0\.0\.1:4312[0-2]\/$/.test(url||'');
 const nativeProgressText=device=>{
  if(device.status!=='running')return '';
- return ({idle:'Android đã mở. Đang chuẩn bị build ứng dụng…',building:'Đang build APK từ mã nguồn dự án, vui lòng đợi…',deploying:'Đã build xong. Đang cài và mở ứng dụng Android…',error:'Không build hoặc mở được ứng dụng. Xem nhật ký và bấm Thử lại.',success:'Ứng dụng Android đã build và gửi lệnh mở.'})[device.build]||'';
+ return device.build==='error'?('Lỗi: '+(device.message||'Không build hoặc mở được ứng dụng. Xem Nhật ký.')):
+  ({idle:'Android đã mở. Đang chuẩn bị build ứng dụng…',building:'Đang build APK từ mã nguồn dự án, vui lòng đợi…',deploying:'Đã build xong. Đang cài và mở ứng dụng Android…',success:'Đã cài và gửi lệnh mở ứng dụng.'})[device.build]||'';
 };
 function cardHTML(i){
  const config=state.config.slots[i]||{};
@@ -89,6 +90,7 @@ function cardHTML(i){
 }
 function render(){
  $('project-count').textContent=state.config.projects.length+' / 3 dự án';
+ updateSidebar();
  $('btn-add-project').disabled=state.config.projects.length>=3;
  const grid=$('device-grid');
  for(let i=0;i<3;i++){
@@ -120,10 +122,7 @@ function render(){
      }
    }
  }
- if(!pinnedView&&view==='all'&&state.config.projects.some(p=>webKind(p.kind))){
-   const active=state.config.slots.findIndex(s=>s.projectId);
-   if(active>=0){view=String(active);pinnedView=true;}
- }
+ // Preserve chosen 3-phone/1-phone view across state changes and releases.
  setView(view);
  wireCards();
 }
@@ -257,6 +256,61 @@ function updateEnvironment(){
  }
  $('btn-sdk-help').hidden=!nativeAssigned||!missingSDK;
 }
+function updateSidebar(){
+ const slots=state.config.slots||[];
+ const connected=slots.filter(x=>Boolean(x?.projectId)).length;
+ const running=(state.devices||[]).filter(d=>d.status==='running').length;
+ const write=(id,value)=>{const el=$(id);if(el)el.textContent=value;};
+ write('nav-projects-count',connected+'/3');
+ write('nav-running',running+' / 3');
+ write('nav-projects',connected+' / 3');
+ if($('nav-running-track'))$('nav-running-track').style.width=(running/3*100)+'%';
+ if($('nav-projects-track'))$('nav-projects-track').style.width=(connected/3*100)+'%';
+ write('sidebar-sdk',state.config.settings?.sdkPath||'Chưa cấu hình Android SDK');
+ const problems=(state.devices||[]).filter(d=>d.build==='error'||d.status==='error');
+ const building=(state.devices||[]).filter(d=>d.build==='building').length;
+ const deploying=(state.devices||[]).filter(d=>d.build==='deploying').length;
+ const synced=(state.devices||[]).filter(d=>d.build==='success').length;
+ let message=problems.length?
+   'Máy '+(problems[0].slot+1)+': '+(problems[0].message||'Cần kiểm tra Nhật ký'):
+   deploying?'Đang cài APK và mở ứng dụng…':
+   building?'Đang build APK / đồng bộ dự án…':
+   running?'Đang chạy '+running+' preview. '+synced+' máy đã đồng bộ.':
+   connected?'Dự án đã gán. Đang chờ chạy.':'Chọn thư mục dự án để bắt đầu.';
+ write('sidebar-status',message);
+ const currentStage=problems.length?'build':deploying?'deploy':building?'build':running?'preview':null;
+ document.querySelectorAll('.pipeline-step').forEach(el=>{
+   el.classList.toggle('active',el.dataset.step===currentStage);
+   el.classList.toggle('error',problems.length>0&&el.dataset.step==='build');
+ });
+}
+function showLogs(){
+ $('log-panel').open=true;
+ renderLogs();
+ $('log-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function setupSidebars(){
+ const shell=document.querySelector('.workspace-shell');
+ if(!shell)return;
+ function toggle(side){
+   const cls=side==='left'?'left-collapsed':'right-collapsed';
+   const collapsed=shell.classList.toggle(cls);
+   const button=$(side==='left'?'toggle-left':'toggle-right');
+   button?.setAttribute('aria-expanded',String(!collapsed));
+ }
+ $('toggle-left')?.addEventListener('click',()=>toggle('left'));
+ $('toggle-right')?.addEventListener('click',()=>toggle('right'));
+ $('sidebar-sdk-button')?.addEventListener('click',()=>void pickSDK());
+ document.querySelectorAll('[data-nav]').forEach(button=>button.addEventListener('click',()=>{
+   document.querySelectorAll('[data-nav]').forEach(item=>item.classList.toggle('active',item===button));
+   const action=button.dataset.nav;
+   if(action==='projects')$('btn-add-project').click();
+   if(action==='devices')setView('all');
+   if(action==='logs')showLogs();
+   if(action==='settings')void pickSDK();
+   if(action==='overview'){document.querySelector('.preview-area')?.scrollIntoView({behavior:'smooth',block:'start'});}
+ }));
+}
 function renderLogs(){
  $('log-content').textContent=logs.slice(-100).map(r=>
    '['+r.time+'] '+(r.slot===null||r.slot===undefined?'':'[Máy '+(r.slot+1)+'] ')+r.message).join('\n') || 'Chưa có thông báo.';
@@ -286,6 +340,7 @@ function showUpdate(info){
  $('update-progress').firstElementChild.style.width=(info.percent||0)+'%';
 }
 function bind(){
+ setupSidebars();
  $('btn-add-project').addEventListener('click',async()=>{
    const result=await invoke('addProject');
    if(result)notify('Đã thêm thư mục dự án. Baodroid đang tự nhận diện cách chạy phù hợp.');
@@ -313,6 +368,7 @@ function bind(){
  });
  api.onLog(item=>{
    logs.push(item);if(logs.length>160)logs.shift();
+   if(item.level==='error')updateSidebar();
    if(item.level==='error'){$('log-panel').open=true;renderLogs();}
    else if($('log-panel').open)renderLogs();
  });

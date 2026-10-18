@@ -91,3 +91,12 @@ Giới hạn: CI Windows kiểm tra chức năng và tạo setup; chưa chạy G
 **Không làm lại từ đầu:** giữ nguyên SDK, AVD và mã nguồn dự án; không xóa dữ liệu AVD. Lỗi đã được ghi vào log và dừng sau hai lần thử. Nếu cả hai cấu hình GPU thất bại, đây có thể là lỗi driver hoặc phiên bản emulator trên Windows cần khắc phục ngoài Baodroid. Đây không phải cam kết đã giải quyết crash trên mọi máy; cần kiểm tra thực tế Windows và APK của ReelTara.
 
 Tham khảo tài liệu chính thức Android Emulator về các lựa chọn GPU và cờ tắt Vulkan: https://developer.android.com/studio/run/emulator-acceleration và https://developer.android.com/studio/run/emulator-troubleshooting.
+
+
+## v0.9.1 — Quay lại Preview Hub và chẩn đoán ReelTara rõ hơn
+
+**Giao diện:** khôi phục bố cục giống bản cũ với điều hướng trái, 3 máy Android ở giữa và panel Build/Deploy/Sync bên phải. Hai thanh bên có thể thu gọn bằng nút Trái/Phải trên thanh công cụ. Vẫn giữ nút Thêm dự án, VS Code, Web Preview, khởi tạo SDK/AVD, phóng to từng máy, ChatGPT/Codex độc lập, Nhật ký và Kiểm tra bản vá. Mặc định hiển thị 3 máy thay vì tự chuyển sang 1 máy. Chi tiết lỗi được hiển thị ngay tại card của máy và panel phải.
+
+**Sửa pipeline APK:** build Vite rồi Capacitor → Gradle → ADB install → mở Activity chính. Khi Node.js cài đặt chuẩn trên Windows, gọi `node.exe npm-cli.js / npx-cli.js` trực tiếp, giảm lỗi gọi `.cmd` qua shell với đường dẫn dự án có khoảng trắng/dấu. Thêm log tóm tắt lỗi theo từng bước và không lặp Gradle khi bản build đã thất bại. Sau khi build APK, ưu tiên đọc `applicationId` và `launchable-activity` từ chính APK bằng `aapt dump badging`; không chỉ suy đoán từ mã Gradle. Sau lệnh install xác minh package và kết quả mở Activity; nếu không được, báo lỗi nguyên nhân thay vì coi màn hình Gmail của emulator là thành công.
+
+**Giới hạn:** Không thể xác nhận lỗi Gradle/Vite cụ thể của ReelTara chỉ bằng ảnh thông báo chung; nếu mã dự án thiếu thư viện, plugin hoặc JDK không tương thích, app sẽ báo rõ lỗi từ bước tương ứng. CI Windows chỉ kiểm thử mã và tạo bộ cài; không có môi trường Android Emulator của người dùng để chứng nhận APK đã chạy. Không cần cài lại SDK hay AVD.

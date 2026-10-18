@@ -23,12 +23,12 @@ function splitLines(stream, callback) {
 }
 function launch(command, args = [], options = {}) {
   const child = spawn(command, args, {
-    cwd: options.cwd, env: options.env || process.env, windowsHide: true,
+    cwd: options.cwd, env: options.env || process.env, windowsHide: options.windowsHide!==false,
     stdio: ['pipe', 'pipe', 'pipe'], shell: options.shell || false
   });
   if (options.onLine) {
-    splitLines(child.stdout, options.onLine);
-    splitLines(child.stderr, options.onLine);
+    splitLines(child.stdout,line=>options.onLine(line,'stdout'));
+    splitLines(child.stderr,line=>options.onLine(line,'stderr'));
   }
   return child;
 }
@@ -51,7 +51,13 @@ function exec(command, args = [], options = {}) {
     }
     child.on('error', finish);
     child.on('close', (code) => {
-      if (code !== 0 && !options.ignoreFailure) finish(new Error((stderr || stdout || `Mã lỗi ${code}`).slice(-1500)));
+      if (code !== 0 && !options.ignoreFailure){
+        const combined=(stderr+'\n'+stdout).trim();
+        const all=combined.split(/\r?\n/);
+        const interesting=all.filter(line=>/\berror\b|fail|exception|what went wrong|could not|not found|unsupported|incompatible|invalid|^npm ERR!/i.test(line));
+        const summary=(interesting.length?interesting.slice(-8):all.slice(-9)).join(' | ').slice(-1800);
+        finish(new Error(path.basename(command)+' (mã '+code+'): '+(summary||'Lệnh thất bại; xem Nhật ký kỹ thuật.')));
+      }
       else finish(null, {stdout, stderr, code});
     });
   });
@@ -62,6 +68,25 @@ function stopProcess(child) {
     const killer = spawn('taskkill', ['/PID', String(child.pid), '/T', '/F'], {windowsHide: true});
     killer.on('error', () => {});
   } else child.kill('SIGTERM');
+}
+function findNodeScriptCommand(tool,env=process.env,platform=process.platform){
+  if(!['npm','npx'].includes(tool))throw new Error('Công cụ Node không hợp lệ.');
+  if(platform!=='win32')return {cmd:tool,preArgs:[],shell:false};
+  const bins=String(env.Path||env.PATH||'').split(path.delimiter).filter(Boolean);
+  const roots=[
+    env.ProgramFiles&&path.join(env.ProgramFiles,'nodejs'),
+    env.PROGRAMFILES&&path.join(env.PROGRAMFILES,'nodejs'),
+    ...bins
+  ].filter(Boolean);
+  for(const root of roots){
+    const node=path.join(root,'node.exe');
+    const script=path.join(root,'node_modules','npm','bin',tool+'-cli.js');
+    if(fs.existsSync(node)&&fs.existsSync(script))
+      return {cmd:node,preArgs:[script],shell:false};
+  }
+  // Fallback supports Node installations managed by third-party tools.
+  // Only local project commands are passed; no user-entered shell text.
+  return {cmd:tool+'.cmd',preArgs:[],shell:true};
 }
 function gradleCommand(root, environment=process.env, platform=process.platform) {
   const wrapper=path.join(root,platform==='win32'?'gradlew.bat':'gradlew');
@@ -81,4 +106,4 @@ function gradleCommand(root, environment=process.env, platform=process.platform)
   const java=roots.map(dir=>path.join(dir,'bin','java.exe')).find(p=>fs.existsSync(p))||'java';
   return {cmd:java,shell:false,preArgs:['-Dorg.gradle.appname=gradlew','-classpath',jar,'org.gradle.wrapper.GradleWrapperMain'],cwd:root};
 }
-module.exports = {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand, splitLines};
+module.exports = {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand, findNodeScriptCommand, splitLines};

@@ -5,7 +5,8 @@ const crypto = require('node:crypto');
 const chokidar = require('chokidar');
 const {spawn} = require('node:child_process');
 const {detectProject, readApplicationId, gradleRoot, findDebugApk} = require('../shared/project');
-const {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand} = require('./process');
+const {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand, findNodeScriptCommand} = require('./process');
+const {apkDetails,packageInstalled,launchSucceeded,launcherComponent}=require('./apk-launch');
 const {findVSCode, openVSCodeFolder} = require('./vscode');
 const {watchTargets,shouldSyncChange} = require('./watch-rules');
 const {BOOT_TIMEOUT_MS,gpuForAttempt,emulatorLaunchArgs,accelerationMessage,bootReport}=require('./boot-policy');
@@ -540,14 +541,32 @@ class Engine {
     const base=gradleRoot(project.path,project.kind);
     if(project.kind==='capacitor') {
       this.update(slot,{build:'building',message:'Đang build Vite + Capacitor vào APK…'});
-      const npm=process.platform==='win32'?'npm.cmd':'npm';
-      const npx=process.platform==='win32'?'npx.cmd':'npx';
+      const npm=findNodeScriptCommand('npm');
+      const npx=findNodeScriptCommand('npx');
       const env={...process.env,ANDROID_SDK_ROOT:this.store.data.settings.sdkPath,
         ANDROID_HOME:this.store.data.settings.sdkPath};
-      await exec(npm,['run','build'],{cwd:project.path,shell:process.platform==='win32',env,timeout:600000});
-      await exec(npx,['--no-install','cap','sync','android'],{cwd:project.path,shell:process.platform==='win32',env,timeout:300000});
+      let lastOutputAt=0;
+      const progress=(step)=>(line,channel)=>{
+        if(/\b(error|fail|warning)\b|^npm ERR!/i.test(line))this.log(step+': '+line.slice(-350),channel==='stderr'?'error':'warn',slot);
+        else if(Date.now()-lastOutputAt>4000){
+          lastOutputAt=Date.now();
+          this.update(slot,{build:'building',message:step+': '+line.slice(0,130)});
+        }
+      };
+      this.log('Đang build giao diện Vite của '+project.name,'info',slot);
+      try {
+        await exec(npm.cmd,[...npm.preArgs,'run','build'],{
+          cwd:project.path,shell:npm.shell,env,timeout:600000,onLine:progress('Vite')});
+      }catch(error){throw new Error('Bước 1/4 (Vite): '+error.message);}
+      this.log('Đang đồng bộ Capacitor Android','info',slot);
+      try {
+        await exec(npx.cmd,[...npx.preArgs,'--no-install','cap','sync','android'],{
+          cwd:project.path,shell:npx.shell,env,timeout:300000,onLine:progress('Capacitor')});
+      }catch(error){throw new Error('Bước 2/4 (Capacitor): '+error.message);}
+
     }
-    const gradle=gradleCommand(base);
+    let gradle;
+    try{gradle=gradleCommand(base);}catch(error){throw new Error('Bước 3/4 (Gradle): '+error.message);}
     this.update(slot,{build:'building',message:project.kind==='react-native'?'Đang build React Native Android…':'Gradle incremental build...'});
     const started=Date.now();
     const build=await new Promise((resolve,reject)=>{
@@ -573,7 +592,7 @@ class Engine {
         if(code===0){resolve();return;}
         const clues=recent.filter(x=>/error|failed|problem|cannot|could not|what went wrong|exception/i.test(x)).slice(-3);
         const summary=(clues.length?clues:recent.slice(-3)).join(' | ').slice(0,650);
-        reject(new Error('Gradle build thất bại (mã '+code+'). '+summary));
+        reject(new Error('Bước 3/4 (Gradle mã '+code+'): '+(summary||'Xem Nhật ký kỹ thuật để biết nguyên nhân.')));
       });
     });
     if (generation!==this.workers[slot].generation) return;
@@ -582,28 +601,44 @@ class Engine {
     if (mustDeploy) {
       this.update(slot,{build:'deploying',message:'Đang cài APK vào Android ảo...'});
       if(project.kind==='react-native')await this.configureMetroDevice(slot);
-      await this.adb(slot,['install','-r','-t',apk],120000);
-      let appId=readApplicationId(project.path,project.kind);
-      if (!appId) {
-        const dir=path.join(path.dirname(path.dirname(this.tools().adb)),'build-tools');
-        if (fs.existsSync(dir)) {
-          const versions=fs.readdirSync(dir).sort((a,b)=>b.localeCompare(a,undefined,{numeric:true}));
-          for (const version of versions) {
-            const aapt=path.join(dir,version,process.platform==='win32'?'aapt.exe':'aapt');
-            if (!fs.existsSync(aapt)) continue;
-            try {const output=await exec(aapt,['dump','badging',apk],{timeout:15000}); appId=output.stdout.match(/package: name='([^']+)'/)?.[1]; if(appId)break;} catch{/* fallback */}
-          }
-        }
+      let installed;
+      try{installed=await this.adb(slot,['install','-r','-t',apk],120000);}
+      catch(error){throw new Error('Bước 4/4 (ADB install): '+error.message);}
+      if(!/Success/i.test(installed.stdout+installed.stderr))
+        throw new Error('Bước 4/4: ADB không xác nhận cài APK: '+(installed.stdout+installed.stderr).slice(-400));
+      // Read the actual APK manifest; Gradle source may specify an applicationIdSuffix.
+      const sdk=path.dirname(path.dirname(this.tools().adb));
+      const versions=fs.existsSync(path.join(sdk,'build-tools'))?
+        fs.readdirSync(path.join(sdk,'build-tools')).sort((a,b)=>b.localeCompare(a,undefined,{numeric:true})):[];
+      let info={id:'',activity:''};
+      for(const version of versions){
+        const aapt=path.join(sdk,'build-tools',version,process.platform==='win32'?'aapt.exe':'aapt');
+        if(!fs.existsSync(aapt))continue;
+        try{
+          const result=await exec(aapt,['dump','badging',apk],{timeout:15000});
+          info=apkDetails(result.stdout);
+          if(info.id)break;
+        }catch(error){this.log('Không đọc được APK bằng aapt '+version+': '+error.message,'warn',slot);}
       }
-      if(appId) {
-        this.log('Đã cài APK: '+appId+'. Đang mở ứng dụng trên Android.','success',slot);
-        const launched=await this.adb(slot,['shell','monkey','-p',appId,'-c','android.intent.category.LAUNCHER','1'],15000);
-        if(/No activities found|monkey aborted/i.test(launched.stdout+launched.stderr))
-          throw new Error('APK đã cài nhưng không tìm thấy màn hình khởi động. Kiểm tra AndroidManifest.xml: '+appId);
-        this.log('Đã gửi lệnh mở '+appId+' trên Android.','success',slot);
+      const appId=info.id||readApplicationId(project.path,project.kind);
+      if(!appId)throw new Error('Bước 4/4: Không xác định được applicationId từ APK.');
+      if(!info.id)this.log('Chưa đọc được APK manifest bằng aapt. Đang dùng applicationId trong Gradle.','warn',slot);
+      const pkg=await this.adb(slot,['shell','pm','list','packages',appId],12000);
+      if(!packageInstalled(pkg.stdout,appId))
+        throw new Error('Bước 4/4: APK đã cài nhưng Android không tìm thấy gói '+appId+'.');
+      this.log('APK đã được cài: '+appId+'. Đang mở Activity chính.','success',slot);
+      const component=info.activity?launcherComponent(appId,info.activity):'';
+      let result;
+      if(component) {
+        result=await this.adb(slot,['shell','am','start','-W','-n',component],25000);
+        if(!launchSucceeded(result.stdout+result.stderr))
+          throw new Error('Bước 4/4: Không thể mở '+component+': '+(result.stdout+result.stderr).slice(-450));
       } else {
-        throw new Error('Đã cài APK nhưng không nhận diện được applicationId để mở. Kiểm tra build.gradle/AndroidManifest.xml.');
+        result=await this.adb(slot,['shell','monkey','-p',appId,'-c','android.intent.category.LAUNCHER','1'],20000);
+        if(!launchSucceeded(result.stdout+result.stderr))
+          throw new Error('Bước 4/4: Android không tìm thấy màn hình khởi động: '+(result.stdout+result.stderr).slice(-450));
       }
+      this.log('Đã mở Activity của '+appId+' trên Android.','success',slot);
     }
     const time=((Date.now()-started)/1000).toFixed(1);
     this.update(slot,{build:'success',lastSync:new Date().toISOString(),message:`Đồng bộ hoàn tất (${time}s)`});
