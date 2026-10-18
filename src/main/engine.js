@@ -7,6 +7,7 @@ const {spawn} = require('node:child_process');
 const {detectProject, readApplicationId, gradleRoot, findDebugApk} = require('../shared/project');
 const {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand, findNodeScriptCommand} = require('./process');
 const {apkDetails,packageInstalled,launchSucceeded,launcherComponent}=require('./apk-launch');
+const {ensureGradleWrapper}=require('./gradle-repair');
 const {findVSCode, openVSCodeFolder} = require('./vscode');
 const {watchTargets,shouldSyncChange} = require('./watch-rules');
 const {BOOT_TIMEOUT_MS,gpuForAttempt,emulatorLaunchArgs,accelerationMessage,bootReport}=require('./boot-policy');
@@ -565,21 +566,28 @@ class Engine {
       }catch(error){throw new Error('Bước 2/4 (Capacitor): '+error.message);}
 
     }
+    if(project.kind==='capacitor'){
+      try{
+        await ensureGradleWrapper(base,project.path,project.kind,{
+          report:message=>this.log(message,'info',slot)});
+      }catch(error){throw new Error('Bước 3/4 (Gradle Wrapper): '+error.message);}
+    }
     let gradle;
     try{gradle=gradleCommand(base);}catch(error){throw new Error('Bước 3/4 (Gradle): '+error.message);}
     this.update(slot,{build:'building',message:project.kind==='react-native'?'Đang build React Native Android…':'Gradle incremental build...'});
     const started=Date.now();
-    const build=await new Promise((resolve,reject)=>{
+    const runGradle=()=>new Promise((resolve,reject)=>{
       const recent=[];
-      let lastReported=0;
+      let lastReported=0,settled=false;
       const args=[':app:assembleDebug','--build-cache','--max-workers=2','--console=plain'];
       if(project.kind==='react-native')args.push('-PreactNativeDevServerPort='+String(8081+slot));
       const child=launch(gradle.cmd,[...gradle.preArgs,...args],{
         cwd:base,shell:gradle.shell,onLine:line=>{
-          recent.push(String(line).slice(0,350));
-          if(recent.length>25)recent.shift();
-          if (/FAILED|ERROR|error:|What went wrong|Execution failed/i.test(line)) this.log(line,'error',slot);
-          else if (/BUILD SUCCESSFUL|BUILD FAILED/i.test(line)) this.log(line,'info',slot);
+          recent.push(String(line).slice(0,400));
+          if(recent.length>45)recent.shift();
+          if (/FAILED|ERROR|error:|What went wrong|Execution failed|ClassNotFoundException|GradleWrapperMain/i.test(line))
+            this.log(line,'error',slot);
+          else if (/BUILD SUCCESSFUL|BUILD FAILED/i.test(line))this.log(line,'info',slot);
           else if (/^> Task |Downloading|BUILDING/i.test(line)&&Date.now()-lastReported>4000){
             lastReported=Date.now();
             this.update(slot,{build:'building',message:'Đang build APK: '+String(line).slice(0,130)});
@@ -587,14 +595,38 @@ class Engine {
         }
       });
       this.workers[slot].runner=child;
-      child.on('error',reject);
-      child.on('close',code=>{
-        if(code===0){resolve();return;}
-        const clues=recent.filter(x=>/error|failed|problem|cannot|could not|what went wrong|exception/i.test(x)).slice(-3);
-        const summary=(clues.length?clues:recent.slice(-3)).join(' | ').slice(0,650);
-        reject(new Error('Bước 3/4 (Gradle mã '+code+'): '+(summary||'Xem Nhật ký kỹ thuật để biết nguyên nhân.')));
+      const done=(err)=>{
+        if(settled)return;settled=true;
+        if(this.workers[slot].runner===child)this.workers[slot].runner=null;
+        err?reject(err):resolve();
+      };
+      child.once('error',done);
+      child.once('close',code=>{
+        if(code===0){done();return;}
+        const whole=recent.join('\n');
+        const lines=recent.filter(x=>/error|failed|problem|cannot|could not|what went wrong|exception/i.test(x)).slice(-7);
+        const summary=(lines.length?lines:recent.slice(-5)).join(' | ').slice(-1000);
+        const error=new Error('Bước 3/4 (Gradle mã '+code+'): '+(summary||'Xem Nhật ký kỹ thuật để biết nguyên nhân.'));
+        error.wrapperClassMissing=/GradleWrapperMain|ClassNotFoundException:\s*org\.gradle\.wrapper/i.test(whole);
+        done(error);
       });
     });
+    try{
+      await runGradle();
+    }catch(error){
+      // A valid-looking JAR can still have a corrupt class table. Repair once
+      // from the exact Capacitor template, then retry only the Gradle phase.
+      if(project.kind!=='capacitor'||!error.wrapperClassMissing)throw error;
+      this.log('Gradle WrapperMain không tải được. Đang phục hồi JAR từ template Capacitor và thử lại một lần.','warn',slot);
+      try{
+        await ensureGradleWrapper(base,project.path,project.kind,{
+          force:true,report:message=>this.log(message,'success',slot)});
+        gradle=gradleCommand(base);
+      }catch(repairError){
+        throw new Error('Không thể tự sửa Gradle Wrapper: '+repairError.message);
+      }
+      await runGradle();
+    }
     if (generation!==this.workers[slot].generation) return;
     const apk=findDebugApk(base);
     if (!apk) throw new Error('Không tìm thấy APK debug trong app/build/outputs/apk/debug.');

@@ -100,3 +100,17 @@ Tham khảo tài liệu chính thức Android Emulator về các lựa chọn GP
 **Sửa pipeline APK:** build Vite rồi Capacitor → Gradle → ADB install → mở Activity chính. Khi Node.js cài đặt chuẩn trên Windows, gọi `node.exe npm-cli.js / npx-cli.js` trực tiếp, giảm lỗi gọi `.cmd` qua shell với đường dẫn dự án có khoảng trắng/dấu. Thêm log tóm tắt lỗi theo từng bước và không lặp Gradle khi bản build đã thất bại. Sau khi build APK, ưu tiên đọc `applicationId` và `launchable-activity` từ chính APK bằng `aapt dump badging`; không chỉ suy đoán từ mã Gradle. Sau lệnh install xác minh package và kết quả mở Activity; nếu không được, báo lỗi nguyên nhân thay vì coi màn hình Gmail của emulator là thành công.
 
 **Giới hạn:** Không thể xác nhận lỗi Gradle/Vite cụ thể của ReelTara chỉ bằng ảnh thông báo chung; nếu mã dự án thiếu thư viện, plugin hoặc JDK không tương thích, app sẽ báo rõ lỗi từ bước tương ứng. CI Windows chỉ kiểm thử mã và tạo bộ cài; không có môi trường Android Emulator của người dùng để chứng nhận APK đã chạy. Không cần cài lại SDK hay AVD.
+
+
+## v0.9.2 — Sửa lỗi GradleWrapperMain khi build ReelTara trên Windows
+
+Dòng lỗi `Could not find or load main class org.gradle.wrapper.GradleWrapperMain` ở bước 3/4 là lỗi Gradle Wrapper, không phải lỗi Android Emulator/SDK. Dự án ReelTara gốc trên GitHub là Vite (không có thư mục `android`), nên Baodroid tạo Android native bằng Capacitor.
+
+- Trước khi chạy Gradle, Baodroid kiểm tra file `android/gradle/wrapper/gradle-wrapper.jar` có ZIP central directory hợp lệ và chứa `org/gradle/wrapper/GradleWrapperMain.class` hay không.
+- Nếu thiếu/hỏng, Baodroid dùng `node_modules/@capacitor/cli/assets/android-template.tar.gz` **đang có sẵn trong dự án** để khôi phục file JAR, không tải tệp nhị phân từ nguồn ngẫu nhiên và không cài lại Android SDK.
+- Tệp JAR cũ được sao lưu với phần mở rộng `.baodroid-backup`; không động vào source React, không xóa AVD/Emulator.
+- Nếu Java vẫn báo thiếu lớp sau lần chạy đầu, Baodroid phục hồi JAR một lần (kể cả khi nhìn có vẻ hợp lệ) và thử build Gradle lại đúng một lần, không build lặp vô hạn. Nếu template CLI cũng thiếu thì hiển thị thông báo chỉ rõ phải cài lại @capacitor/cli thay vì chờ.
+- Chạy Wrapper thông qua `java -jar` giống script Gradle Wrapper chuẩn, tránh thao tác shell trên đường dẫn Unicode Windows.
+- Giữ nguyên UI v0.9.1: thanh trái/phải thu gọn, 3 máy, VS Code, Web Preview, Android Native, ChatGPT/Codex và cập nhật.
+
+Giới hạn: CI Windows kiểm tra code và đóng gói; không thể xác nhận Gradle/Capacitor build thành công trên máy người dùng cho đến khi chạy Baodroid v0.9.2 tại Windows. Nếu còn lỗi, Nhật ký sẽ ghi chính xác thông báo Gradle.

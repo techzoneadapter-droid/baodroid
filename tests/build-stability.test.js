@@ -27,9 +27,8 @@ test('Windows Gradle bypasses cmd.exe even with spaces and Vietnamese in the pro
  assert.equal(cmd.cwd,project);
  assert.deepEqual(cmd.preArgs,[
   '-Dorg.gradle.appname=gradlew',
-  '-classpath',
-  path.join(project,'gradle','wrapper','gradle-wrapper.jar'),
-  'org.gradle.wrapper.GradleWrapperMain'
+  '-jar',
+  path.join(project,'gradle','wrapper','gradle-wrapper.jar')
  ]);
 }));
 test('Windows Gradle gives actionable error when wrapper jar is missing',()=>makeTmp(root=>{

@@ -104,6 +104,6 @@ function gradleCommand(root, environment=process.env, platform=process.platform)
     environment.PROGRAMFILES&&path.join(environment.PROGRAMFILES,'Android','Android Studio','jbr')
   ].filter(Boolean);
   const java=roots.map(dir=>path.join(dir,'bin','java.exe')).find(p=>fs.existsSync(p))||'java';
-  return {cmd:java,shell:false,preArgs:['-Dorg.gradle.appname=gradlew','-classpath',jar,'org.gradle.wrapper.GradleWrapperMain'],cwd:root};
+  return {cmd:java,shell:false,preArgs:['-Dorg.gradle.appname=gradlew','-jar',jar],cwd:root};
 }
 module.exports = {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand, findNodeScriptCommand, splitLines};
