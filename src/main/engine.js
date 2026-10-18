@@ -8,6 +8,7 @@ const {detectProject, readApplicationId, gradleRoot, findDebugApk} = require('..
 const {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand} = require('./process');
 const {findVSCode, openVSCodeFolder} = require('./vscode');
 const {watchTargets,shouldSyncChange} = require('./watch-rules');
+const {BOOT_TIMEOUT_MS,gpuForAttempt,emulatorLaunchArgs,accelerationMessage,bootReport}=require('./boot-policy');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const isSlot = i => Number.isInteger(i) && i >= 0 && i <= 2;
 function chooseFreeAvd(names,slots,index) {
@@ -33,7 +34,7 @@ class Engine {
   constructor(store, emit) {
     this.store = store; this.emit = emit;
     this.devices = Array.from({length:3}, (_,i) => ({slot:i,status:'off',serial:`emulator-${5554 + i*2}`,preview:null,build:'idle',message:'Chưa khởi chạy',lastSync:null}));
-    this.workers = Array.from({length:3}, () => ({emulator:null,attached:false,runner:null,metro:null,metroLastStart:0,watcher:null,timer:null,debounce:null,monitorTimer:null,recoveryTimer:null,recoveryAttempts:0,autoLaunching:false,adbFailures:0,previewFailures:0,bootedAt:0,generation:0,busy:false,dirty:false,manuallyDeploy:false,flutterReady:false}));
+    this.workers = Array.from({length:3}, () => ({emulator:null,attached:false,runner:null,metro:null,metroLastStart:0,watcher:null,timer:null,debounce:null,monitorTimer:null,recoveryTimer:null,recoveryAttempts:0,gpuAttempt:0,lastEmulatorLines:[],autoLaunching:false,adbFailures:0,previewFailures:0,bootedAt:0,generation:0,busy:false,dirty:false,manuallyDeploy:false,flutterReady:false}));
     this.logPath=store.file?path.join(path.dirname(store.file),'baodroid-runtime.log'):null;
     this.logs=[]; this.closed=false; this.webPreview=null;
     if(this.logPath)try{
@@ -182,6 +183,7 @@ class Engine {
       return {state:'booting'};
     }
     worker.recoveryAttempts=0;
+    worker.gpuAttempt=0;
     this.clearWorker(slot);
     this.update(slot,{status:'off',build:'idle',message:'Đang tự tìm máy ảo và mở ứng dụng…'});
     const success=await this.autoStartSlot(slot);
@@ -291,10 +293,16 @@ class Engine {
         .map(d=>Number(d.serial?.replace('emulator-','')));
       port=chooseEmulatorPort(observed.map(x=>x.port),5554+slot*2,activeSlots);
     }
+    if(!attachedSerial && process.platform==='win32'){
+      const check=await exec(this.tools().emulator,['-accel-check'],{timeout:12000,ignoreFailure:true});
+      const issue=accelerationMessage(check.code,check.stdout,check.stderr);
+      if(issue){this.log(issue,'error',slot);throw new Error(issue);}
+    }
     const runningSerial=attachedSerial||'emulator-'+port;
     this.devices[slot].serial=runningSerial;
     const generation=++worker.generation;
     worker.attached=Boolean(attachedSerial);
+    worker.lastEmulatorLines=[];
     this.update(slot,{status:'booting',previewMode:'android',webUrl:null,build:'idle',
       message:attachedSerial?'Đã tìm thấy Android đang chạy. Đang chuẩn bị cài ứng dụng…':'Đang khởi động Android Emulator thật…',
       lastSync:null});
@@ -307,25 +315,49 @@ class Engine {
         void this.boot(slot,generation,project).catch(error=>{if(worker.generation===generation)this.fail(slot,error);});
         return {status:'booting',serial:runningSerial,attached:true};
       }
-      worker.emulator=launch(this.tools().emulator,['-avd',assigned.avd,'-port',String(port),'-no-window','-no-audio','-no-boot-anim','-netdelay','none','-netspeed','full'],{
-        onLine:line => {if (/ERROR|PANIC|failed/i.test(line)) this.log(line,'error',slot);}
+      const gpu=gpuForAttempt(worker.gpuAttempt);
+      this.log('Đang dùng GPU '+gpu+' và cold boot, không dùng snapshot cũ.','info',slot);
+      worker.emulator=launch(this.tools().emulator,emulatorLaunchArgs({avd:assigned.avd,port,attempt:worker.gpuAttempt}),{
+        onLine:line=>{
+          worker.lastEmulatorLines.push(String(line).slice(-350));
+          if(worker.lastEmulatorLines.length>16)worker.lastEmulatorLines.shift();
+          if (/ERROR|PANIC|failed|hypervisor|WH[P]?X|vulkan|crash|Cannot/i.test(line))
+            this.log('Emulator: '+line,'error',slot);
+        }
       });
       worker.emulator.on('error', err=>{if (worker.generation===generation) this.fail(slot,err);});
-      worker.emulator.on('close', code=>{if (worker.generation===generation && ['booting','running'].includes(this.devices[slot].status)) this.fail(slot,new Error(`Emulator đã dừng (${code}).`));});
+      worker.emulator.on('close', code=>{
+        if(worker.generation!==generation||!['booting','running'].includes(this.devices[slot].status))return;
+        const recent=worker.lastEmulatorLines.filter(x=>/ERROR|PANIC|failed|hypervisor|WHPX|vulkan|crash|Cannot/i.test(x)).slice(-2);
+        this.fail(slot,new Error('Android Emulator đã thoát (mã '+code+'). '+(recent.join(' | ')||worker.lastEmulatorLines.slice(-2).join(' | '))));
+      });
       void this.boot(slot,generation,project).catch(error=>{if (worker.generation===generation) this.fail(slot,error);});
     } catch(error) {this.fail(slot,error); throw error;}
     return {status:'booting',serial};
   }
   async boot(slot,generation,project) {
-    let ready=false;
-    for (let i=0;i<90;i++) {
-      if (this.workers[slot].generation!==generation) return;
-      try {const v=await this.adb(slot,['shell','getprop','sys.boot_completed'],4000); if (v.stdout.trim()==='1') {ready=true;break;}} catch {/* still booting */}
-      await sleep(2000);
+    const started=Date.now();
+    let ready=false,adbState='offline',lastError='',lastProgress=0;
+    while(Date.now()-started<BOOT_TIMEOUT_MS) {
+      if(this.closed||this.workers[slot].generation!==generation)return;
+      try{
+        const v=await this.adb(slot,['shell','getprop','sys.boot_completed'],3500);
+        adbState=v.stdout.trim()==='1'?'booted':'connected';
+        if(adbState==='booted'){ready=true;break;}
+      }catch(error){lastError=error.message;adbState='not ready';}
+      const elapsed=Date.now()-started;
+      if(elapsed-lastProgress>16000){
+        lastProgress=elapsed;
+        this.update(slot,{message:'Android đang khởi động: '+Math.round(elapsed/1000)+'s / '+Math.round(BOOT_TIMEOUT_MS/1000)+'s. ADB: '+adbState});
+        this.log('Khởi động AVD: '+Math.round(elapsed/1000)+'s, ADB='+adbState,'info',slot);
+      }
+      await sleep(1750);
     }
-    if (!ready) throw new Error('Hết thời gian chờ Android khởi động (180 giây). Kiểm tra tăng tốc phần cứng/AVD.');
+    if(!ready)throw new Error(bootReport({waitedMs:Date.now()-started,adbState,lastError}));
     if (this.workers[slot].generation!==generation) return;
     this.workers[slot].bootedAt=Date.now();
+    this.workers[slot].recoveryAttempts=0;
+    this.workers[slot].gpuAttempt=0;
     this.workers[slot].adbFailures=0;
     this.workers[slot].previewFailures=0;
     this.update(slot,{status:'running',message:'Android đã sẵn sàng, ứng dụng đang tự đồng bộ'});
@@ -583,20 +615,26 @@ class Engine {
     this.log(message,'error',slot);
   }
   fail(slot,error) {
-    this.log(error.message,'error',slot);
-    this.clearWorker(slot);
     const worker=this.workers[slot];
-    const assigned=this.store.data.slots[slot];
-    const shouldRetry=!this.closed && !!assigned.projectId && !!assigned.avd && worker.recoveryAttempts<3;
-    this.update(slot,{status:'error',build:'error',message:shouldRetry?'Mất kết nối. Baodroid đang tự kết nối lại…':error.message});
-    if(!shouldRetry)return;
-    const delays=[3000,8000,20000];
-    const delay=delays[worker.recoveryAttempts++];
-    this.log(`Sẽ tự thử lại lần ${worker.recoveryAttempts}/3 sau ${Math.round(delay/1000)} giây.`,'warn',slot);
+    const message=String(error?.message||error||'Android Emulator lỗi');
+    const retryable=/chưa hoàn tất khởi động|đã thoát|mất kết nối/i.test(message);
+    const shouldRetry=!this.closed && retryable && !worker.attached && worker.recoveryAttempts<1;
+    this.log('Máy '+(slot+1)+': '+message,'error',slot);
+    // Cancel any outstanding boot monitor and release the failed emulator process.
+    this.clearWorker(slot);
+    this.update(slot,{status:'error',build:'error',
+      message:shouldRetry?'AVD không khởi động. Tự thử thêm một lần với GPU dự phòng…':message});
+    if(!shouldRetry){
+      this.log('Đã dừng thử lại để tránh chờ/lặp vô hạn. Bấm Sửa kết nối & mở app khi cần thử thủ công.','warn',slot);
+      return;
+    }
+    worker.recoveryAttempts++;
+    worker.gpuAttempt=1;
+    this.log('Thử AVD thêm một lần với GPU '+gpuForAttempt(worker.gpuAttempt)+' sau 4 giây.','warn',slot);
     worker.recoveryTimer=setTimeout(()=>{
       worker.recoveryTimer=null;
       void this.autoStartSlot(slot);
-    },delay);
+    },4000);
   }
   async reloadSlot(slot) {
     this.requireSlot(slot);
@@ -679,6 +717,7 @@ class Engine {
     const isExternal=this.workers[slot].attached;
     this.clearWorker(slot);
     this.workers[slot].recoveryAttempts=0;
+    this.workers[slot].gpuAttempt=0;
     this.update(slot,{status:'off',previewMode:null,webUrl:null,build:'idle',message:'Đã dừng thủ công',lastSync:null,rotation:0,screenHeight:undefined,screenWidth:undefined});
     if(previous!=='off'&&!isExternal) {
       try {await this.adb(slot,['emu','kill'],3500);}catch{/* Emulator already stopped */}

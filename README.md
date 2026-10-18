@@ -71,3 +71,12 @@ Nếu SDK/AVD đã tạo nhưng máy Android chỉ hiện màn hình Home, nhấ
 - Không cần xóa Android SDK, AVD hay project. Khi cập nhật, thử ReelTara trước; lần build Android đầu tiên có thể mất vài phút.
 
 Giới hạn: CI Windows kiểm tra chức năng và tạo setup; chưa chạy Gradle/Capacitor của ReelTara trên máy Windows của bạn. Nếu dự án thiếu `gradle-wrapper.jar` hoặc cần JDK khác, phần nhật ký sẽ nêu lỗi cụ thể.
+
+
+## v0.8.5 — Máy ảo Android khởi động quá lâu hoặc dừng hẳn
+
+- Trước khi khởi động AVD trên Windows, Baodroid gọi `emulator -accel-check`. Nếu WHPX/tăng tốc máy ảo không sẵn sàng, hiển thị lỗi cụ thể ngay thay vì chờ boot 180 giây lặp lại. Đã bật Virtualization trong Task Manager không đồng nghĩa chắc chắn Windows Hypervisor Platform khả dụng.
+- Máy mới được chạy `-no-snapshot-load -gpu software`; nếu boot lỗi một lần, tự thử lại duy nhất với `-gpu swiftshader`, theo cơ chế GPU của Android Emulator. Không xóa dữ liệu AVD, không cài lại Android SDK.
+- Thời gian chờ ADB tối đa 120 giây/mỗi lần, có tiến độ và log định kỳ. Lỗi emulator/PANIC/WHPX/crash được ghi lại; khi cả hai lựa chọn GPU đều không chạy thì dừng hẳn, không tạo vòng thử vô hạn.
+- Nếu thất bại, dùng nút **Sửa kết nối & mở app** để thử lại sau khi giải quyết nguyên nhân, hoặc gửi file `baodroid-runtime.log` trong thư mục dữ liệu Baodroid để tiếp tục xác định lỗi.
+- Việc khởi động Android ảo, build APK và chạy ReelTara thực tế trên máy người dùng vẫn phải được kiểm nghiệm; CI Windows chỉ kiểm tra logic, cú pháp và đóng gói, không có AVD phần cứng.
