@@ -10,15 +10,15 @@ function mockEngine(){
   settings:{autoBuild:true}};
  return new Engine({data,save(){}},()=>{});
 }
-test('launches headless with SwiftShader and Vulkan off, then tries visible host GPU',()=>{
- assert.deepEqual(GPU_MODES,['swiftshader','host']);
+test('reuses proven host GPU for both headless and visible fallback, leaving Vulkan disabled',()=>{
+ assert.deepEqual(GPU_MODES,['host','host']);
  assert.equal(BOOT_TIMEOUT_MS,150000);
  assert.equal(ADB_DISCOVERY_TIMEOUT_MS,55000);
  const args=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5554});
  assert.deepEqual(args.slice(0,4),['-avd','Baodroid_Preview_1','-port','5554']);
  assert.ok(args.includes('-no-window'));
  assert.ok(args.includes('-no-snapshot-load'));
- assert.deepEqual(args.slice(args.indexOf('-gpu'),args.indexOf('-gpu')+2),['-gpu','swiftshader']);
+ assert.deepEqual(args.slice(args.indexOf('-gpu'),args.indexOf('-gpu')+2),['-gpu','host']);
  assert.deepEqual(args.slice(args.indexOf('-feature'),args.indexOf('-feature')+2),['-feature','-Vulkan']);
  const fallback=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5556,attempt:1});
  assert.equal(fallback.includes('-no-window'),false);

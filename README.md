@@ -123,3 +123,13 @@ Khi Baodroid báo `adb.exe: device 'emulator-5554' not found`, lỗi xảy ra **
 Nếu suốt 55 giây ADB không đăng ký bất kỳ serial nào của máy đó, Baodroid kết thúc lần thử vô vọng sớm và thử một cấu hình GPU dự phòng duy nhất. Với Android đã được ADB nhìn thấy dưới dạng `offline` hoặc `device` nhưng boot chậm, cho phép tối đa 150 giây để hoàn thành boot. Nhật ký phân biệt lỗi **thiết bị chưa xuất hiện** và **Android đã xuất hiện nhưng chưa boot xong**; không tự xóa AVD, dữ liệu APK, thư mục dự án hay cài lại SDK. Bố cục Preview Hub cũ từ v0.9.1 được giữ nguyên.
 
 Đây là bản sửa luồng kết nối, không phải bằng chứng emulator đã chạy tốt trên máy tính người dùng. Nếu AVD vẫn không khởi động ở cả hai chế độ đồ họa, cần lấy log emulator thực tế và kiểm tra bộ driver GPU, bản emulator và cấu hình AVD, thay vì liên tục tăng timeout hoặc build APK.
+
+
+## v0.9.4 — Khắc phục máy ảo không đăng ký ADB sau khi khởi động
+
+- Theo log thực tế máy Windows, GPU NVIDIA host **đã từng mở được Android** ở chế độ cửa sổ dự phòng; nhưng GPU SwiftShader chạy ẩn trong các bản gần đây liên tục không đăng ký ADB. Ưu tiên `-gpu host -no-window -feature -Vulkan` để tận dụng GPU đã hoạt động, rồi thử lại **một lần bằng GPU host với cửa sổ dự phòng** nếu Android vẫn không lên. Không tự xoá dữ liệu AVD, không tạo emulator mới ngoài ba slot.
+- Trước khi chạy emulator, kiểm tra cả cổng console (5554, 5556, …) và cổng ADB ngay sau (5555, 5557, …) có bị chương trình khác chiếm hay không. Nếu bị chiếm, tìm cặp cổng tiếp theo thay vì cố khởi động trên cổng cũ.
+- Ghi thêm lỗi emulator bằng `-verbose`, giữ buffer các dòng gần đây và bổ sung thông báo tình trạng GPU/cổng vào nhật ký khi emulator không hiện trong `adb devices`. Không nhầm lỗi này với lỗi Gradle/Capacitor; chưa bắt đầu build cho đến khi Android chạy thật.
+- Giữ nguyên giao diện ba máy Preview Hub, ChatGPT, VS Code và chức năng cập nhật của bản v0.9.3.
+
+**Cần kiểm tra trên máy thật:** CI Windows không thể chạy máy ảo có tăng tốc GPU. Nếu v0.9.4 vẫn không khởi động được AVD, vui lòng dùng Nhật ký kỹ thuật và log khởi động chi tiết mới; không nên tiếp tục cài lại Android SDK hoặc thay đổi timeout vô điều kiện. Tham khảo hướng dẫn đồ hoạ của Android: https://developer.android.com/studio/run/emulator-acceleration

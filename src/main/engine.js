@@ -8,6 +8,7 @@ const {detectProject, readApplicationId, gradleRoot, findDebugApk} = require('..
 const {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand, findNodeScriptCommand} = require('./process');
 const {apkDetails,packageInstalled,launchSucceeded,launcherComponent}=require('./apk-launch');
 const {ensureGradleWrapper}=require('./gradle-repair');
+const {findFreeEmulatorPort}=require('./emulator-ports');
 const {findVSCode, openVSCodeFolder} = require('./vscode');
 const {watchTargets,shouldSyncChange} = require('./watch-rules');
 const {BOOT_TIMEOUT_MS,ADB_DISCOVERY_TIMEOUT_MS,gpuForAttempt,emulatorLaunchArgs,accelerationMessage,bootReport}=require('./boot-policy');
@@ -297,7 +298,9 @@ class Engine {
       const activeSlots=this.devices.filter((_,i)=>i!==slot)
         .filter(d=>d.status==='running'||d.status==='booting')
         .map(d=>Number(d.serial?.replace('emulator-','')));
-      port=chooseEmulatorPort(observed.map(x=>x.port),5554+slot*2,activeSlots);
+      const occupied=observed.map(x=>x.port).concat(activeSlots);
+      port=await findFreeEmulatorPort({preferred:5554+slot*2,blocked:occupied});
+      this.log('ADB/cổng kiểm tra: '+port+'–'+(port+1)+' khả dụng; không chạy đè máy ảo khác.','info',slot);
     }
     if(!attachedSerial && process.platform==='win32'){
       const check=await exec(this.tools().emulator,['-accel-check'],{timeout:12000,ignoreFailure:true});
@@ -322,21 +325,25 @@ class Engine {
         return {status:'booting',serial:runningSerial,attached:true};
       }
       const gpu=gpuForAttempt(worker.gpuAttempt);
-      this.log('Khởi động AVD: GPU '+gpu+', Vulkan tắt, '+(worker.gpuAttempt===0?'chạy nền':'cửa sổ dự phòng')+'.','info',slot);
-      worker.emulator=launch(this.tools().emulator,emulatorLaunchArgs({avd:assigned.avd,port,attempt:worker.gpuAttempt}),{
+      this.log('Khởi động AVD: GPU '+gpu+', Vulkan tắt, '+(worker.gpuAttempt===0?'chạy ẩn':'mở cửa sổ dự phòng')+'.','info',slot);
+      worker.emulator=launch(this.tools().emulator,
+        [...emulatorLaunchArgs({avd:assigned.avd,port,attempt:worker.gpuAttempt}),'-verbose'],{
         onLine:line=>{
-          worker.lastEmulatorLines.push(String(line).slice(-350));
-          if(worker.lastEmulatorLines.length>16)worker.lastEmulatorLines.shift();
-          if (/\bERROR\b|\bPANIC\b|failed|crash|Cannot|fatal/i.test(line))
-            this.log('Emulator: '+line,'error',slot);
+          worker.lastEmulatorLines.push(String(line).slice(-450));
+          if(worker.lastEmulatorLines.length>120)worker.lastEmulatorLines.shift();
+          if (/\bERROR\b|\bPANIC\b|failed|crash|Cannot|fatal|exception/i.test(line) &&
+              !/crashpad_annotations/i.test(line))
+            this.log('Emulator: '+String(line).slice(-480),'error',slot);
         }
       });
       worker.emulator.on('error', err=>{if (worker.generation===generation) this.fail(slot,err);});
       worker.emulator.on('close', code=>{
         if(worker.generation!==generation||!['booting','running'].includes(this.devices[slot].status))return;
-        const recent=worker.lastEmulatorLines.filter(x=>/\bERROR\b|\bPANIC\b|failed|crash|Cannot|fatal/i.test(x)).slice(-2);
+        const recent=worker.lastEmulatorLines.filter(x=>/\bERROR\b|\bPANIC\b|failed|Cannot|fatal|exception/i.test(x)&&
+          !/crashpad_annotations/i.test(x)).slice(-3);
         const diagnosis=(code===3221225477||code===-1073741819)?' Windows 0xC0000005: emulator crash (có thể do driver GPU/Vulkan).':'';
-        this.fail(slot,new Error('Android Emulator đã thoát (mã '+code+').'+diagnosis+' '+(recent.join(' | ')||worker.lastEmulatorLines.slice(-2).join(' | '))));
+        this.fail(slot,new Error('Android Emulator đã thoát (mã '+code+').'+diagnosis+
+          ' '+(recent.join(' | ')||worker.lastEmulatorLines.slice(-3).join(' | '))));
       });
       void this.boot(slot,generation,project).catch(error=>{if (worker.generation===generation) this.fail(slot,error);});
     } catch(error) {this.fail(slot,error); throw error;}
@@ -385,9 +392,16 @@ class Engine {
         }else adbState=observed.length?'other AVD / port not ready':'not listed';
       }catch(error){lastError=error.message;adbState='ADB connection error';}
       if(!seen && elapsed>=ADB_DISCOVERY_TIMEOUT_MS){
-        // ADB has not registered this AVD; waiting longer for Android boot
-        // cannot fix a host emulator which never opened its ADB port.
-        throw new Error(bootReport({waitedMs:elapsed,adbState,lastError,
+        // Diagnose the real emulator child output, instead of treating all
+        // failures to register in ADB as merely an ADB connection problem.
+        const recent=this.workers[slot].lastEmulatorLines||[];
+        const useful=recent.filter(x=>/error|fail|cannot|panic|exception|graphics|renderer|vulkan|qemu|WHPX/i.test(x)
+          && !/crashpad_annotations|module_list\[/i.test(x)).slice(-4);
+        const details=useful.length?useful.join(' | ').slice(-480):'Không thấy lỗi cụ thể từ emulator. Kiểm tra cổng/GPU hoặc phiên bản AVD.';
+        this.log('AVD '+assigned.avd+' chưa đăng ký ADB; GPU='+gpuForAttempt(this.workers[slot].gpuAttempt)+
+          '; '+details,'error',slot);
+        throw new Error(bootReport({waitedMs:elapsed,adbState,
+          lastError:(lastError&& !/not found/.test(lastError)?lastError+' | ':'')+details,
           serial:this.devices[slot].serial,seen:false}));
       }
       if(elapsed-lastProgress>=14000){
@@ -743,7 +757,7 @@ class Engine {
     }
     worker.recoveryAttempts++;
     worker.gpuAttempt=1;
-    this.log('Tự thử lần cuối với GPU '+gpuForAttempt(worker.gpuAttempt)+' (không thay đổi SDK/AVD).','warn',slot);
+    this.log('Tự thử lần cuối bằng GPU host có cửa sổ dự phòng (cấu hình từng khởi động được trên Windows).','warn',slot);
     worker.recoveryTimer=setTimeout(()=>{
       worker.recoveryTimer=null;
       void this.autoStartSlot(slot);

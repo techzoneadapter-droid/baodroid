@@ -1,9 +1,9 @@
 'use strict';
 /* Android Emulator startup policy. Keep this pure for Windows CI tests. */
-// Prefer headless Vulkan-disabled SwiftShader. If Windows crashes with
-// 0xC0000005, retry using a visible, host-GPU-backed emulator window;
-// Baodroid still renders the Android screen inside its own preview.
-const GPU_MODES=Object.freeze(['swiftshader','host']);
+// Previous user's host GPU visible AVD booted successfully, while headless
+// SwiftShader failed to register in ADB. Use that proven GPU for both tries;
+// retry once with a visible window only if headless host launch fails.
+const GPU_MODES=Object.freeze(['host','host']);
 const BOOT_TIMEOUT_MS=150000;
 const ADB_DISCOVERY_TIMEOUT_MS=55000;
 function gpuForAttempt(attempt){
