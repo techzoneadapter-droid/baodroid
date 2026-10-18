@@ -11,26 +11,39 @@ const makeTmp=fn=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'baodroid-build-'));
  try{return fn(root);}finally{fs.rmSync(root,{recursive:true,force:true});}
 };
-test('Windows Gradle bypasses cmd.exe even with spaces and Vietnamese in the project path',()=>makeTmp(root=>{
+test('Windows Gradle uses official gradlew.bat via cwd, never a constructed absolute JAR path',()=>makeTmp(root=>{
  const project=path.join(root,'Dự án ReelTara (Android)');
- const wrapper=path.join(project,'gradle','wrapper');
- fs.mkdirSync(wrapper,{recursive:true});
+ const dir=path.join(project,'gradle','wrapper');
+ fs.mkdirSync(dir,{recursive:true});
  fs.writeFileSync(path.join(project,'gradlew.bat'),'@echo off\r\n');
- fs.writeFileSync(path.join(wrapper,'gradle-wrapper.jar'),'fixture');
- const env={JAVA_HOME:path.join(root,'JDK có dấu và khoảng trắng')};
- const java=path.join(env.JAVA_HOME,'bin','java.exe');
- fs.mkdirSync(path.dirname(java),{recursive:true});
- fs.writeFileSync(java,'fixture');
- const cmd=gradleCommand(project,env,'win32');
- assert.equal(cmd.cmd,java);
+ fs.writeFileSync(path.join(dir,'gradle-wrapper.jar'),Buffer.alloc(800,1));
+ fs.writeFileSync(path.join(dir,'gradle-wrapper.properties'),'distributionUrl=https://services.gradle.org/distributions/gradle-8.14-bin.zip');
+ const cmd=gradleCommand(project,{ComSpec:'C:\\Windows\\System32\\cmd.exe'},'win32');
+ assert.equal(cmd.cmd,'C:\\Windows\\System32\\cmd.exe');
  assert.equal(cmd.shell,false);
  assert.equal(cmd.cwd,project);
- assert.deepEqual(cmd.preArgs,[
-  '-Dorg.gradle.appname=gradlew',
-  '-jar',
-  path.join(project,'gradle','wrapper','gradle-wrapper.jar')
- ]);
+ assert.deepEqual(cmd.preArgs,['/d','/c','gradlew.bat']);
+ assert.equal(cmd.preArgs.join(' ').includes(project),false);
 }));
+test('official Gradle batch executes correctly from a real Unicode and spaced Windows folder',async t=>{
+ if(process.platform!=='win32'){t.skip('Real cmd.exe smoke test only runs on Windows GitHub Actions');return;}
+ const {exec}=require('../src/main/process');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'baodroid-windows-gradle-'));
+ try{
+   const project=path.join(root,'Dự án ReelTara (Android)');
+   const dir=path.join(project,'gradle','wrapper');
+   fs.mkdirSync(dir,{recursive:true});
+   fs.writeFileSync(path.join(project,'gradlew.bat'),
+     '@echo off\r\nif not exist "gradle\\wrapper\\gradle-wrapper.jar" exit /b 17\r\necho GRADLE_WRAPPER_CWD_OK\r\n');
+   fs.writeFileSync(path.join(dir,'gradle-wrapper.jar'),Buffer.alloc(800,1));
+   fs.writeFileSync(path.join(dir,'gradle-wrapper.properties'),'distributionUrl=fixture');
+   const cmd=gradleCommand(project,process.env,'win32');
+   const result=await exec(cmd.cmd,[...cmd.preArgs,':app:assembleDebug'],{
+     cwd:cmd.cwd,shell:cmd.shell,timeout:15000
+   });
+   assert.match(result.stdout,/GRADLE_WRAPPER_CWD_OK/);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
 test('Windows Gradle gives actionable error when wrapper jar is missing',()=>makeTmp(root=>{
  fs.writeFileSync(path.join(root,'gradlew.bat'),'@echo off\r\n');
  assert.throws(()=>gradleCommand(root,{},'win32'),/gradle-wrapper\.jar/);

@@ -90,20 +90,25 @@ function findNodeScriptCommand(tool,env=process.env,platform=process.platform){
 }
 function gradleCommand(root, environment=process.env, platform=process.platform) {
   const wrapper=path.join(root,platform==='win32'?'gradlew.bat':'gradlew');
-  if(!fs.existsSync(wrapper))throw new Error('Không tìm thấy Gradle Wrapper (gradlew/gradlew.bat).');
+  if(!fs.existsSync(wrapper))throw new Error('Không tìm thấy Gradle Wrapper (gradlew/gradlew.bat) trong '+root);
   if(platform!=='win32')return {cmd:wrapper,shell:false,preArgs:[],cwd:root};
-  // Windows CMD with shell:true incorrectly parses absolute paths containing
-  // spaces, Unicode and special characters. Invoke the SAME Gradle wrapper JAR
-  // directly through Java, avoiding cmd.exe and gradlew.bat quoting entirely.
   const jar=path.join(root,'gradle','wrapper','gradle-wrapper.jar');
-  if(!fs.existsSync(jar))throw new Error('Thiếu gradle/wrapper/gradle-wrapper.jar trong dự án Android.');
-  const roots=[
-    environment.JAVA_HOME,
-    environment.ProgramFiles&&path.join(environment.ProgramFiles,'Android','Android Studio','jbr'),
-    environment.LOCALAPPDATA&&path.join(environment.LOCALAPPDATA,'Programs','Android Studio','jbr'),
-    environment.PROGRAMFILES&&path.join(environment.PROGRAMFILES,'Android','Android Studio','jbr')
-  ].filter(Boolean);
-  const java=roots.map(dir=>path.join(dir,'bin','java.exe')).find(p=>fs.existsSync(p))||'java';
-  return {cmd:java,shell:false,preArgs:['-Dorg.gradle.appname=gradlew','-jar',jar],cwd:root};
+  const props=path.join(root,'gradle','wrapper','gradle-wrapper.properties');
+  try{
+    // Validate exactly the artifact that will be used by Gradle's script.
+    const stat=fs.statSync(jar);
+    if(!stat.isFile()||stat.size<500)throw new Error('JAR rỗng hoặc không hợp lệ.');
+    const fd=fs.openSync(jar,'r');
+    fs.closeSync(fd);
+    if(!fs.statSync(props).isFile())throw new Error('Thiếu gradle-wrapper.properties');
+  }catch(error){
+    throw new Error('Không đọc được Gradle Wrapper tại '+jar+': '+error.message);
+  }
+  // Use the official Gradle/Capacitor gradlew.bat. It derives APP_HOME from
+  // %~dp0, so Java never receives a homegrown absolute JAR argument. Crucially
+  // cmd.exe is launched with cwd=root and only a RELATIVE script filename.
+  // No shell:true, no concatenation of project paths with shell metacharacters.
+  return {cmd:environment.ComSpec||environment.COMSPEC||'cmd.exe',
+    shell:false,preArgs:['/d','/c','gradlew.bat'],cwd:root};
 }
 module.exports = {sdkRoot, toolsForSdk, exec, launch, stopProcess, gradleCommand, findNodeScriptCommand, splitLines};

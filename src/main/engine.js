@@ -603,6 +603,7 @@ class Engine {
     }
     let gradle;
     try{gradle=gradleCommand(base);}catch(error){throw new Error('Bước 3/4 (Gradle): '+error.message);}
+    this.log('Gradle Windows: dùng script gradlew.bat chính thức từ thư mục Android dự án, tránh đường dẫn JAR tự ghép.','info',slot);
     this.update(slot,{build:'building',message:project.kind==='react-native'?'Đang build React Native Android…':'Gradle incremental build...'});
     const started=Date.now();
     const runGradle=()=>new Promise((resolve,reject)=>{
@@ -636,7 +637,7 @@ class Engine {
         const lines=recent.filter(x=>/error|failed|problem|cannot|could not|what went wrong|exception/i.test(x)).slice(-7);
         const summary=(lines.length?lines:recent.slice(-5)).join(' | ').slice(-1000);
         const error=new Error('Bước 3/4 (Gradle mã '+code+'): '+(summary||'Xem Nhật ký kỹ thuật để biết nguyên nhân.'));
-        error.wrapperClassMissing=/GradleWrapperMain|ClassNotFoundException:\s*org\.gradle\.wrapper/i.test(whole);
+        error.wrapperClassMissing=/GradleWrapperMain|ClassNotFoundException:\s*org\.gradle\.wrapper|Unable to access jarfile/i.test(whole);
         done(error);
       });
     });
@@ -646,7 +647,7 @@ class Engine {
       // A valid-looking JAR can still have a corrupt class table. Repair once
       // from the exact Capacitor template, then retry only the Gradle phase.
       if(project.kind!=='capacitor'||!error.wrapperClassMissing)throw error;
-      this.log('Gradle WrapperMain không tải được. Đang phục hồi JAR từ template Capacitor và thử lại một lần.','warn',slot);
+      this.log('Không chạy được Gradle Wrapper (JAR/GradleWrapperMain). Đang phục hồi JAR từ Capacitor và thử lại chỉ một lần.','warn',slot);
       try{
         await ensureGradleWrapper(base,project.path,project.kind,{
           force:true,report:message=>this.log(message,'success',slot)});

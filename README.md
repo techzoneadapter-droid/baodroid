@@ -166,3 +166,15 @@ Sau nhiều lần thử chế độ `-no-window` trên Windows khiến AVD khôn
 - Mã chuyển thể và thông báo bản quyền MIT của Expo được ghi tại `THIRD_PARTY_NOTICES.md`.
 
 **Chưa được xác minh trên phần cứng của bạn:** CI Windows có thể chạy test và tạo bộ cài nhưng không có GPU/AVD của PC người dùng; nên phải cài bản vá và thử máy 1 để biết quá trình Emulator → Gradle → APK đã hoạt động chưa. Nếu Android còn không boot thì lỗi là lớp emulator host; không nên tiếp tục tăng thời gian chờ hoặc thay toàn bộ SDK.
+
+
+## v0.9.8 — Sửa lỗi Gradle jarfile từ log ReelTara trên Windows
+
+**Triệu chứng:** Android Emulator đã khởi động và ADB hoạt động, nhưng bước 3/4 không build được vì Java báo `Unable to access jarfile ...gradle-wrapper.jar`. Thay vì thay bộ giả lập tiếp, Baodroid dùng phương thức chuẩn của chính Gradle/Capacitor:
+
+- Gọi `gradlew.bat :app:assembleDebug ...` từ **cwd = thư mục Android native của dự án**, bằng tiến trình `cmd.exe /d /c gradlew.bat`. Không tự ghép đường dẫn tuyệt đối của JAR để truyền cho `java -jar`. Đây là cách chạy dựa trên `gradlew.bat` chính thức trong [Gradle](https://github.com/gradle/gradle/blob/master/gradlew.bat) và [Capacitor](https://github.com/ionic-team/capacitor/blob/main/android-template/gradlew.bat). Cửa sổ CMD được ẩn; không yêu cầu người dùng thao tác.
+- Kiểm tra JAR có thể truy cập và `gradle-wrapper.properties` tồn tại trước khi build; với dự án Capacitor có JAR bị thiếu/hỏng thì vẫn giữ tự khôi phục từ template như v0.9.2. Nếu vẫn gặp `GradleWrapperMain` / `Unable to access jarfile`, chỉ thử khôi phục một lần, không lặp build vô hạn.
+- Bổ sung kiểm thử thực thi `cmd.exe` thật trên GitHub Actions Windows trong đường dẫn có tiếng Việt, khoảng trắng. Mục đích là bắt lỗi escaping từng bị bỏ sót trong những test mô phỏng trước.
+- Giữ nguyên UI Preview Hub, 3 slot Android, Expo/Web, VS Code, Codex/ChatGPT, cập nhật bản vá và cơ chế tạo AVD v0.9.7. Không đổi Android SDK hay đụng dữ liệu AVD.
+
+**Phạm vi xác nhận:** CI Windows chỉ chạy Gradle batch smoke test với JAR fixture và đóng gói. Không có mã nguồn ReelTara trên máy người dùng, nên không thể khẳng định toàn bộ APK build thành công trước khi chạy kiểm tra thực tế.

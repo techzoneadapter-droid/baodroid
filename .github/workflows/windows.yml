@@ -75,5 +75,5 @@ jobs:
           if (-not ($assets.Name -match '^Baodroid-Setup-.*\.exe$')) { throw "Missing NSIS installer" }
           if (-not ($assets.Name -contains 'latest.yml')) { throw "Missing latest.yml updater metadata" }
           $paths = @($assets | ForEach-Object { $_.FullName })
-          gh release create $tag @paths --target main --title "Baodroid $tag" --notes 'Adopt MIT-licensed Expo CLI Android emulator startup and ADB device manager: standard visible AVD launch on Windows, sequential boot discovery, activity readiness and per-slot serial isolation; keep existing Windows Preview Hub.'
+          gh release create $tag @paths --target main --title "Baodroid $tag" --notes 'Fix ReelTara Windows Gradle build using the official gradlew.bat from the Android project working directory; remove custom absolute Java JAR invocation and verify Windows Unicode/space paths through an actual cmd.exe test.'
           if ($LASTEXITCODE -ne 0) { throw "Release upload failed" }
