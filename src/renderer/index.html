@@ -15,12 +15,33 @@
       <div><strong>BAODROID</strong><small>ANDROID PREVIEW • LOCAL</small></div>
     </div>
     <div class="header-right">
+      <button type="button" id="toggle-left" class="button quiet panel-toggle" aria-controls="left-panel" aria-expanded="true" title="Thu gọn / mở điều hướng">☰ Trái</button>
+      <button type="button" id="toggle-right" class="button quiet panel-toggle" aria-controls="right-panel" aria-expanded="true" title="Thu gọn / mở thông tin build">▥ Phải</button>
       <span id="sdk-status" class="sdk-status">Đang kiểm tra Android SDK…</span>
       <button id="btn-sdk" class="button quiet" title="Chọn thư mục Android SDK trên Windows">⚙ Android SDK</button>
       <button id="btn-update" class="button quiet">↓ Kiểm tra bản vá</button>
       <span class="version">v0.9.1</span>
     </div>
   </header>
+  <div class="workspace-shell">
+    <aside id="left-panel" class="nav-side" aria-label="Điều hướng Baodroid">
+      <div class="panel-overline">ĐIỀU HƯỚNG</div>
+      <nav class="nav-items" aria-label="Điều hướng">
+        <button type="button" class="nav-item active" data-nav="overview" title="Tổng quan"><span class="nav-icon">▦</span><span class="nav-label">Tổng quan</span></button>
+        <button type="button" class="nav-item" data-nav="projects" title="Dự án Android"><span class="nav-icon">▤</span><span class="nav-label">Dự án Android</span><span class="nav-count" id="nav-projects-count">0/3</span></button>
+        <button type="button" class="nav-item" data-nav="devices" title="Máy ảo"><span class="nav-icon">▯</span><span class="nav-label">Máy ảo</span></button>
+        <button type="button" class="nav-item" data-nav="logs" title="Nhật ký hoạt động"><span class="nav-icon">☷</span><span class="nav-label">Nhật ký hoạt động</span></button>
+        <button type="button" class="nav-item" data-nav="settings" title="Cài đặt Android SDK"><span class="nav-icon">⚙</span><span class="nav-label">Cài đặt</span></button>
+      </nav>
+      <div class="nav-resources">
+        <div class="panel-overline">TÀI NGUYÊN</div>
+        <div class="resource-entry"><span class="nav-label">Máy ảo đang chạy</span><b id="nav-running">0 / 3</b></div>
+        <div class="resource-track"><span id="nav-running-track"></span></div>
+        <div class="resource-entry"><span class="nav-label">Dự án đã kết nối</span><b id="nav-projects">0 / 3</b></div>
+        <div class="resource-track"><span id="nav-projects-track"></span></div>
+        <p class="nav-platform"><i></i> Windows • Chạy local</p>
+      </div>
+    </aside>
   <main class="main">
     <section class="intro">
       <div class="intro-text">
@@ -52,6 +73,29 @@
     </details>
     <footer>Baodroid chạy cục bộ trên Windows • Dùng Android Emulator và thư mục dự án ngay trên máy • Không cần điện thoại USB</footer>
   </main>
+    <aside id="right-panel" class="info-side" aria-label="Build Deploy Sync">
+      <div class="side-heading">⚡ <span class="right-label">Build / Deploy / Sync</span></div>
+      <div class="pipeline">
+        <div class="pipeline-step" data-step="watch"><span class="step-number">01</span><div class="right-label"><b>File watcher</b><small>Phát hiện thay đổi code</small></div></div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-step" data-step="build"><span class="step-number">02</span><div class="right-label"><b>Incremental build</b><small>Vite / Gradle / Flutter</small></div></div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-step" data-step="deploy"><span class="step-number">03</span><div class="right-label"><b>ADB deploy</b><small>Cài APK trên Android ảo</small></div></div>
+        <div class="pipeline-arrow">↓</div>
+        <div class="pipeline-step" data-step="preview"><span class="step-number">04</span><div class="right-label"><b>Live preview</b><small>Hiển thị màn hình trong Baodroid</small></div></div>
+      </div>
+      <div class="side-sync-box">
+        <strong class="right-label">Trạng thái hệ thống</strong>
+        <p id="sidebar-status" class="right-label">Đang kiểm tra các dự án…</p>
+      </div>
+      <div class="side-quick">
+        <h3 class="right-label">⚙ Cài đặt nhanh</h3>
+        <div class="right-label">Android SDK (Windows)</div>
+        <p id="sidebar-sdk" class="right-label">Đang kiểm tra…</p>
+        <button type="button" id="sidebar-sdk-button" class="button quiet right-label">Chọn Android SDK</button>
+      </div>
+    </aside>
+  </div>
 </div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <section id="update-popup" class="update-popup" hidden role="dialog" aria-label="Cập nhật Baodroid">

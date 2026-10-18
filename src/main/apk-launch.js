@@ -7,7 +7,7 @@ function apkDetails(output){
  return {id,activity};
 }
 function packageInstalled(output,id){
- return Boolean(id)&&String(output||'').split(/\r?\n/).some(s=>s.trim().startsWith('package:'+id));
+ return Boolean(id)&&String(output||'').split(/\r?\n/).some(s=>s.trim()==='package:'+id);
 }
 function launchSucceeded(output){
  const s=String(output||'');
