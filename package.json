@@ -1,7 +1,7 @@
 {
   "name": "baodroid",
   "productName": "Baodroid",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "Local Windows mobile preview for Vite, Expo Web and Android Emulator with independent Codex coding",
   "author": "Baodroid Contributors",
   "license": "MIT",
@@ -10,7 +10,7 @@
     "start": "electron .",
     "dev": "electron .",
     "test": "node --test tests/*.test.js",
-    "check": "node --check src/main/index.js && node --check src/main/engine.js && node --check src/main/androidbox-runtime.js && node --check src/main/emulator-ports.js && node --check src/main/gradle-repair.js && node --check src/main/apk-launch.js && node --check src/main/web-preview.js && node --check src/main/android-setup.js && node --check src/main/native-project.js && node --check src/main/process.js && node --check src/main/boot-policy.js && node --check src/main/watch-rules.js && node --check src/main/update.js && node --check src/main/vscode.js && node --check src/main/ai.js && node --check src/main/codex-tools.js && node --check src/renderer/app.js && node --check src/renderer/ai-ui.js",
+    "check": "node --check src/main/index.js && node --check src/main/engine.js && node --check src/main/expo-device-manager.js && node --check src/main/androidbox-runtime.js && node --check src/main/emulator-ports.js && node --check src/main/gradle-repair.js && node --check src/main/apk-launch.js && node --check src/main/web-preview.js && node --check src/main/android-setup.js && node --check src/main/native-project.js && node --check src/main/process.js && node --check src/main/boot-policy.js && node --check src/main/watch-rules.js && node --check src/main/update.js && node --check src/main/vscode.js && node --check src/main/ai.js && node --check src/main/codex-tools.js && node --check src/renderer/app.js && node --check src/renderer/ai-ui.js",
     "dist:win": "electron-builder --win nsis --publish never",
     "release:win": "electron-builder --win nsis --publish always"
   },

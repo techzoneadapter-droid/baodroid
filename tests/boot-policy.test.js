@@ -10,28 +10,31 @@ function mockEngine(){
   settings:{autoBuild:true}};
  return new Engine({data,save(){}},()=>{});
 }
-test('reuses proven host GPU for both headless and visible fallback, leaving Vulkan disabled',()=>{
- assert.deepEqual(GPU_MODES,['host','host']);
- assert.equal(BOOT_TIMEOUT_MS,150000);
- assert.equal(ADB_DISCOVERY_TIMEOUT_MS,55000);
+test('Expo-style minimal visible AVD launch uses standard command and host GPU only on retry',()=>{
+ assert.deepEqual(GPU_MODES,['default','host']);
+ assert.equal(BOOT_TIMEOUT_MS,180000);
+ assert.equal(ADB_DISCOVERY_TIMEOUT_MS,110000);
  const args=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5554});
- assert.deepEqual(args.slice(0,4),['-avd','Baodroid_Preview_1','-port','5554']);
- assert.ok(args.includes('-no-window'));
- assert.ok(args.includes('-no-snapshot-load'));
- assert.deepEqual(args.slice(args.indexOf('-gpu'),args.indexOf('-gpu')+2),['-gpu','host']);
- assert.deepEqual(args.slice(args.indexOf('-feature'),args.indexOf('-feature')+2),['-feature','-Vulkan']);
+ assert.deepEqual(args.slice(0,3),['@Baodroid_Preview_1','-port','5554']);
+ assert.equal(args.includes('-no-window'),false);
+ assert.equal(args.includes('-gpu'),false);
+ assert.equal(args.includes('-no-snapshot-load'),false);
+ assert.equal(args.includes('-feature'),false);
  const fallback=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5556,attempt:1});
  assert.equal(fallback.includes('-no-window'),false);
+ assert.equal(fallback.includes('-no-snapshot-load'),true);
+ assert.deepEqual(fallback.slice(fallback.indexOf('-feature'),fallback.indexOf('-feature')+2),['-feature','-Vulkan']);
  assert.deepEqual(fallback.slice(fallback.indexOf('-gpu'),fallback.indexOf('-gpu')+2),['-gpu','host']);
  assert.equal(gpuForAttempt(8),'host');
+ assert.equal(gpuForAttempt(0),'default');
  assert.throws(()=>emulatorLaunchArgs({avd:'bad',port:5555}),/không hợp lệ/);
 });
 test('preflight describes missing hypervisor instead of waiting several minutes',()=>{
  assert.equal(accelerationMessage(0,'',''),null);
  assert.match(accelerationMessage(1,'WHPX is not installed'),/WHPX/);
- assert.match(bootReport({waitedMs:55000,adbState:'not listed',serial:'emulator-5554'}),/55 giây/);
- assert.match(bootReport({waitedMs:55000,adbState:'not listed',serial:'emulator-5554'}),/ADB không phát hiện thiết bị Android emulator-5554/);
- assert.match(bootReport({waitedMs:150000,adbState:'offline',seen:true}),/đã được ADB nhận diện/);
+ assert.match(bootReport({waitedMs:110000,adbState:'not listed',serial:'emulator-5554'}),/110 giây/);
+ assert.match(bootReport({waitedMs:110000,adbState:'not listed',serial:'emulator-5554'}),/ADB không phát hiện thiết bị Android emulator-5554/);
+ assert.match(bootReport({waitedMs:180000,adbState:'offline',seen:true}),/đã được ADB nhận diện/);
 });
 test('first emulator crash allows one GPU fallback, then stops',()=>{
  const engine=mockEngine();
@@ -57,10 +60,10 @@ test('non-retryable hypervisor error does not launch another AVD',()=>{
  engine.dispose();
 });
 
-test('ADB device missing is treated as one retryable startup failure, not a 90s silent loop',()=>{
+test('ADB missing device error triggers at most one explicit fallback, not an infinite loop',()=>{
  const engine=mockEngine();
  engine.devices[0].status='booting';
- engine.fail(0,new Error(bootReport({waitedMs:55000,adbState:'not listed',serial:'emulator-5554'})));
+ engine.fail(0,new Error('Android AVD không xuất hiện trong ADB sau 110 giây'));
  assert.equal(engine.workers[0].recoveryAttempts,1);
  assert.equal(engine.workers[0].gpuAttempt,1);
  engine.dispose();
@@ -70,7 +73,7 @@ test('startSlot explicitly starts the ADB server before port discovery',()=>{
  const path=require('node:path');
  const engine=fs.readFileSync(path.join(__dirname,'../src/main/engine.js'),'utf8');
  assert.match(engine,/\['start-server'\]/);
- assert.match(engine,/ADB tìm lại đúng/);
+ assert.match(engine,/waitForAvdBoot/);
  assert.match(engine,/ADB_DISCOVERY_TIMEOUT_MS/);
- assert.match(engine,/parseRunningAvdName\(lookup\.stdout\)===assigned\.avd/);
+ assert.match(engine,/onSerial:serial/);
 });

@@ -153,3 +153,16 @@ Nguồn tham khảo: [Wolklaw/Androidbox](https://github.com/Wolklaw/Androidbox)
 Nếu danh sách dự án chưa có **Neon Arrow** và **WavePlay**, nhấn **✦ Tạo 2 dự án NVB**. Baodroid sao chép hai template Vite/Capacitor-preview từ chính bộ cài vào `Documents/NVB_IAA_Apps/NeonArrow` và `Documents/NVB_IAA_Apps/WavePlay`, sau đó gắn chúng vào các slot trống. Cần có ít nhất **2 slot dự án trống**. Nếu đã tồn tại dữ liệu ở thư mục đích mà không phải template do Baodroid tạo, ứng dụng từ chối ghi đè.
 
 Hai template là giao diện/prototype tương tác. Chọn **Cài thư viện** ở từng máy để cài Vite và chạy Web Preview. Muốn xem APK Android trong emulator, nhấn **Khởi tạo Android SDK & AVD** và xác nhận cài Capacitor. Việc này có thể mất nhiều phút và cần SDK, Gradle, JDK. Các ứng dụng mẫu **chưa tích hợp AdMob/Meta**, không phải sản phẩm phát hành. Cập nhật Baodroid không tự động thêm dự án hoặc sửa các thư mục đã có nếu người dùng không chọn tạo.
+
+
+## v0.9.7 — Tích hợp quản lý Android Emulator từ Expo CLI (MIT)
+
+Sau nhiều lần thử chế độ `-no-window` trên Windows khiến AVD không xuất hiện ở ADB, Baodroid chuyển sang **cách quản lý máy ảo tham khảo và chuyển thể từ Expo CLI** (MIT): https://github.com/expo/expo/tree/main/packages/@expo/cli/src/start/platforms/android
+
+- Ưu tiên khởi động Android Emulator chính thức bằng cú pháp chuẩn `emulator @Baodroid_Preview_1 -port 5554 -no-audio`, có **cửa sổ emulator thật** thay vì ép chạy headless. Cửa sổ này là bộ máy Android; Baodroid vẫn chiếu màn hình và thao tác trên thiết bị qua ADB sau khi khởi động. Nếu khởi động chuẩn không được, thử một lần với GPU host, Vulkan tắt, cold boot.
+- Tích hợp `src/main/expo-device-manager.js`: dựa trên cơ chế Expo CLI, đọc danh sách ADB tuần tự, nhận diện tên AVD qua `adb emu avd name` nếu serial thay đổi, chờ `sys.boot_completed=1` và boot animation dừng, ngừng theo dõi khi slot đã đóng.
+- Không nhận nhầm emulator giữa ba dự án và không khởi chạy nhiều vòng vô hạn. Giữ nguyên hệ thống tạo Android SDK/AVD, Capacitor, Gradle, VS Code, ChatGPT và UI Preview Hub của bản trước.
+- **Không nhúng scrcpy thành emulator**: scrcpy (https://github.com/Genymobile/scrcpy, Apache-2.0) chỉ sao chép màn hình Android đã hoạt động, không tự chạy Android. `google/android-emulator-container-scripts` chạy Linux/KVM và không hỗ trợ Docker Desktop Windows cho KVM; không phù hợp mục tiêu Windows local.
+- Mã chuyển thể và thông báo bản quyền MIT của Expo được ghi tại `THIRD_PARTY_NOTICES.md`.
+
+**Chưa được xác minh trên phần cứng của bạn:** CI Windows có thể chạy test và tạo bộ cài nhưng không có GPU/AVD của PC người dùng; nên phải cài bản vá và thử máy 1 để biết quá trình Emulator → Gradle → APK đã hoạt động chưa. Nếu Android còn không boot thì lỗi là lớp emulator host; không nên tiếp tục tăng thời gian chờ hoặc thay toàn bộ SDK.

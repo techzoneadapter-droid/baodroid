@@ -13,14 +13,15 @@ test('port preflight skips busy ADB console pairs without trying to kill other p
 test('port preflight throws an actionable message if all emulator pairs are occupied',async()=>{
  await assert.rejects(findFreeEmulatorPort({preferred:5554,probe:async()=>false}),/Không có cặp cổng emulator/);
 });
-test('host graphics is selected on both attempts, fallback alone has external window',()=>{
- assert.equal(gpuForAttempt(0),'host');
+test('Expo-style AVD launch uses standard visible mode, with host GPU fallback',()=>{
+ assert.equal(gpuForAttempt(0),'default');
  assert.equal(gpuForAttempt(1),'host');
  const primary=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5554,attempt:0});
  const backup=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5554,attempt:1});
- assert.ok(primary.includes('-no-window'));
+ assert.equal(primary.includes('-no-window'),false);
  assert.equal(backup.includes('-no-window'),false);
- assert.deepEqual(primary.slice(primary.indexOf('-gpu'),primary.indexOf('-gpu')+2),['-gpu','host']);
+ assert.equal(primary.includes('-gpu'),false);
+ assert.deepEqual(backup.slice(backup.indexOf('-gpu'),backup.indexOf('-gpu')+2),['-gpu','host']);
 });
 test('port binding probe rejects invalid ports without side effects',async()=>{
  assert.equal(await portIsAvailable(-1).catch(()=>false),false);

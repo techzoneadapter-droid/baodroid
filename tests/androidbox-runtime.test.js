@@ -52,11 +52,13 @@ test('console probe distinguishes a live QEMU console from ADB device not listed
    assert.match(bootReport({waitedMs:125000,adbState:'not listed',consoleReady:true}),/QEMU đã mở cổng console/);
  }finally{await new Promise(resolve=>server.close(resolve));}
 });
-test('backend uses Androidbox-inspired console health probing to extend a live QEMU boot rather than quitting at 55s',()=>{
+test('Expo device manager now owns boot polling while Androidbox environment/health helpers remain available',()=>{
  const engine=fs.readFileSync(path.join(__dirname,'../src/main/engine.js'),'utf8');
- assert.ok(engine.includes('consoleSeen=consoleSeen||health.consoleReady'));
- assert.match(engine,/!seen && !consoleSeen && elapsed>=ADB_DISCOVERY_TIMEOUT_MS/);
+ const manager=fs.readFileSync(path.join(__dirname,'../src/main/expo-device-manager.js'),'utf8');
+ assert.match(engine,/waitForAvdBoot/);
+ assert.match(engine,/ADB_DISCOVERY_TIMEOUT_MS/);
  assert.ok(engine.includes('emulatorEnvironment(this.store.data.settings.sdkPath)'));
- assert.ok(engine.includes('emulatorHealth({avd:assigned.avd,port})'));
  assert.match(engine,/'-no-metrics'/);
+ assert.match(manager,/parseAdbDeviceList/);
+ assert.match(manager,/getprop','sys.boot_completed/);
 });
