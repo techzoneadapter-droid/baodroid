@@ -32,5 +32,6 @@ test('Android crash diagnostics identify Windows access violation and avoid endl
  assert.match(engine,/3221225477/);
  assert.match(engine,/recoveryAttempts<1/);
  assert.match(policy,/'-feature','-Vulkan'/);
- assert.match(policy,/if\(attempt<1\)args\.push\('-no-window'\)/);
+ assert.match(policy,/const args=\['@'\+avd,'-port'/);
+ assert.doesNotMatch(policy,/args\.push\('-no-window'\)/);
 });
