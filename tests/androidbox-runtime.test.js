@@ -56,7 +56,7 @@ test('backend uses Androidbox-inspired console health probing to extend a live Q
  const engine=fs.readFileSync(path.join(__dirname,'../src/main/engine.js'),'utf8');
  assert.ok(engine.includes('consoleSeen=consoleSeen||health.consoleReady'));
  assert.match(engine,/!seen && !consoleSeen && elapsed>=ADB_DISCOVERY_TIMEOUT_MS/);
- assert.match(engine,/emulatorEnvironment\\(this.store.data.settings.sdkPath\\)/);
- assert.match(engine,/emulatorHealth\\(\\{avd:assigned.avd,port\\}\\)/);
+ assert.ok(engine.includes('emulatorEnvironment(this.store.data.settings.sdkPath)'));
+ assert.ok(engine.includes('emulatorHealth({avd:assigned.avd,port})'));
  assert.match(engine,/'-no-metrics'/);
 });
