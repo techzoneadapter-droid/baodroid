@@ -114,3 +114,12 @@ Dòng lỗi `Could not find or load main class org.gradle.wrapper.GradleWrapperM
 - Giữ nguyên UI v0.9.1: thanh trái/phải thu gọn, 3 máy, VS Code, Web Preview, Android Native, ChatGPT/Codex và cập nhật.
 
 Giới hạn: CI Windows kiểm tra code và đóng gói; không thể xác nhận Gradle/Capacitor build thành công trên máy người dùng cho đến khi chạy Baodroid v0.9.2 tại Windows. Nếu còn lỗi, Nhật ký sẽ ghi chính xác thông báo Gradle.
+
+
+## v0.9.3 — ADB không nhận emulator-5554
+
+Khi Baodroid báo `adb.exe: device 'emulator-5554' not found`, lỗi xảy ra **trước** bước Gradle/Capacitor: máy ảo chưa đăng ký với ADB hoặc đang dùng serial khác. Trước khi mở emulator, Baodroid chủ động `adb start-server`, kiểm tra `adb devices -l`, và nếu AVD xuất hiện ở cổng khác thì gọi `adb emu avd name` để xác nhận đúng tên máy ảo rồi tiếp quản serial ấy. Không bao giờ cố gán máy ảo khác vào dự án.
+
+Nếu suốt 55 giây ADB không đăng ký bất kỳ serial nào của máy đó, Baodroid kết thúc lần thử vô vọng sớm và thử một cấu hình GPU dự phòng duy nhất. Với Android đã được ADB nhìn thấy dưới dạng `offline` hoặc `device` nhưng boot chậm, cho phép tối đa 150 giây để hoàn thành boot. Nhật ký phân biệt lỗi **thiết bị chưa xuất hiện** và **Android đã xuất hiện nhưng chưa boot xong**; không tự xóa AVD, dữ liệu APK, thư mục dự án hay cài lại SDK. Bố cục Preview Hub cũ từ v0.9.1 được giữ nguyên.
+
+Đây là bản sửa luồng kết nối, không phải bằng chứng emulator đã chạy tốt trên máy tính người dùng. Nếu AVD vẫn không khởi động ở cả hai chế độ đồ họa, cần lấy log emulator thực tế và kiểm tra bộ driver GPU, bản emulator và cấu hình AVD, thay vì liên tục tăng timeout hoặc build APK.
