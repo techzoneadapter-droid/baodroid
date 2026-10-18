@@ -316,20 +316,21 @@ class Engine {
         return {status:'booting',serial:runningSerial,attached:true};
       }
       const gpu=gpuForAttempt(worker.gpuAttempt);
-      this.log('Đang dùng GPU '+gpu+' và cold boot, không dùng snapshot cũ.','info',slot);
+      this.log('Khởi động AVD: GPU '+gpu+', Vulkan tắt, '+(worker.gpuAttempt===0?'chạy nền':'cửa sổ dự phòng')+'.','info',slot);
       worker.emulator=launch(this.tools().emulator,emulatorLaunchArgs({avd:assigned.avd,port,attempt:worker.gpuAttempt}),{
         onLine:line=>{
           worker.lastEmulatorLines.push(String(line).slice(-350));
           if(worker.lastEmulatorLines.length>16)worker.lastEmulatorLines.shift();
-          if (/ERROR|PANIC|failed|hypervisor|WH[P]?X|vulkan|crash|Cannot/i.test(line))
+          if (/\bERROR\b|\bPANIC\b|failed|crash|Cannot|fatal/i.test(line))
             this.log('Emulator: '+line,'error',slot);
         }
       });
       worker.emulator.on('error', err=>{if (worker.generation===generation) this.fail(slot,err);});
       worker.emulator.on('close', code=>{
         if(worker.generation!==generation||!['booting','running'].includes(this.devices[slot].status))return;
-        const recent=worker.lastEmulatorLines.filter(x=>/ERROR|PANIC|failed|hypervisor|WHPX|vulkan|crash|Cannot/i.test(x)).slice(-2);
-        this.fail(slot,new Error('Android Emulator đã thoát (mã '+code+'). '+(recent.join(' | ')||worker.lastEmulatorLines.slice(-2).join(' | '))));
+        const recent=worker.lastEmulatorLines.filter(x=>/\bERROR\b|\bPANIC\b|failed|crash|Cannot|fatal/i.test(x)).slice(-2);
+        const diagnosis=(code===3221225477||code===-1073741819)?' Windows 0xC0000005: emulator crash (có thể do driver GPU/Vulkan).':'';
+        this.fail(slot,new Error('Android Emulator đã thoát (mã '+code+').'+diagnosis+' '+(recent.join(' | ')||worker.lastEmulatorLines.slice(-2).join(' | '))));
       });
       void this.boot(slot,generation,project).catch(error=>{if (worker.generation===generation) this.fail(slot,error);});
     } catch(error) {this.fail(slot,error); throw error;}
@@ -625,12 +626,12 @@ class Engine {
     this.update(slot,{status:'error',build:'error',
       message:shouldRetry?'AVD không khởi động. Tự thử thêm một lần với GPU dự phòng…':message});
     if(!shouldRetry){
-      this.log('Đã dừng thử lại để tránh chờ/lặp vô hạn. Bấm Sửa kết nối & mở app khi cần thử thủ công.','warn',slot);
+      this.log('Đã dừng tự thử. Nếu vẫn lỗi 0xC0000005, mở Nhật ký để xem nguyên nhân rồi bấm Sửa kết nối & mở app khi cần.','warn',slot);
       return;
     }
     worker.recoveryAttempts++;
     worker.gpuAttempt=1;
-    this.log('Thử AVD thêm một lần với GPU '+gpuForAttempt(worker.gpuAttempt)+' sau 4 giây.','warn',slot);
+    this.log('Tự thử lần cuối: cửa sổ Android dự phòng, GPU '+gpuForAttempt(worker.gpuAttempt)+' và tắt Vulkan.','warn',slot);
     worker.recoveryTimer=setTimeout(()=>{
       worker.recoveryTimer=null;
       void this.autoStartSlot(slot);

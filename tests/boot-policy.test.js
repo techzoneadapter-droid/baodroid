@@ -10,22 +10,25 @@ function mockEngine(){
   settings:{autoBuild:true}};
  return new Engine({data,save(){}},()=>{});
 }
-test('launches first with safe software GPU, cold boot and fixed validated port',()=>{
- assert.deepEqual(GPU_MODES,['software','swiftshader']);
- assert.equal(BOOT_TIMEOUT_MS,120000);
+test('launches headless with SwiftShader and Vulkan off, then tries visible host GPU',()=>{
+ assert.deepEqual(GPU_MODES,['swiftshader','host']);
+ assert.equal(BOOT_TIMEOUT_MS,90000);
  const args=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5554});
  assert.deepEqual(args.slice(0,4),['-avd','Baodroid_Preview_1','-port','5554']);
  assert.ok(args.includes('-no-window'));
  assert.ok(args.includes('-no-snapshot-load'));
- assert.deepEqual(args.slice(args.indexOf('-gpu'),args.indexOf('-gpu')+2),['-gpu','software']);
- assert.deepEqual(emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5556,attempt:1}).slice(7,9),['-no-snapshot-load','-gpu']);
- assert.equal(gpuForAttempt(8),'swiftshader');
+ assert.deepEqual(args.slice(args.indexOf('-gpu'),args.indexOf('-gpu')+2),['-gpu','swiftshader']);
+ assert.deepEqual(args.slice(args.indexOf('-feature'),args.indexOf('-feature')+2),['-feature','-Vulkan']);
+ const fallback=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5556,attempt:1});
+ assert.equal(fallback.includes('-no-window'),false);
+ assert.deepEqual(fallback.slice(fallback.indexOf('-gpu'),fallback.indexOf('-gpu')+2),['-gpu','host']);
+ assert.equal(gpuForAttempt(8),'host');
  assert.throws(()=>emulatorLaunchArgs({avd:'bad',port:5555}),/không hợp lệ/);
 });
 test('preflight describes missing hypervisor instead of waiting several minutes',()=>{
  assert.equal(accelerationMessage(0,'',''),null);
  assert.match(accelerationMessage(1,'WHPX is not installed'),/WHPX/);
- assert.match(bootReport({waitedMs:120000,adbState:'offline'}),/120 giây/);
+ assert.match(bootReport({waitedMs:90000,adbState:'offline'}),/90 giây/);
 });
 test('first emulator crash allows one GPU fallback, then stops',()=>{
  const engine=mockEngine();

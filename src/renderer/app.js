@@ -49,17 +49,17 @@ function cardHTML(i){
     (p.id===config.projectId?' selected':'')+
     (state.config.slots.some((s,index)=>index!==i&&s.projectId===p.id)?' disabled':'')+'>'+
     escapeHTML(p.name)+' ('+escapeHTML(p.kind)+')</option>')).join('');
- const title=project?'Mở thư mục trong VS Code':'Chọn thư mục dự án';
- const placeholder=booting?'Đang mở ứng dụng…':active?'Đang nhận ảnh màn hình…':
-   project?'Sẵn sàng kết nối preview':'Chưa chọn dự án';
- const hint=project?(device.message||'Baodroid tự chạy ứng dụng.'):'Bấm Chọn thư mục dự án để bắt đầu.';
- return '<article class="device-card '+(active?'running':'')+(view===String(i)?' chosen':'')+'" data-device="'+i+'">'+
-  '<div class="device-head"><span class="device-title"><span class="state-dot '+escapeHTML(device.status||'off')+'"></span>Preview '+(i+1)+'</span>'+
+ const title=project?'VS Code':'Chọn thư mục';
+ const placeholder=booting?'Đang mở Android…':active?'Đang lấy hình ảnh…':
+   project?device.status==='error'?'Android chưa khởi động được':'Chưa chạy ứng dụng':'Chưa chọn dự án';
+ const hint=project?(device.message||'Baodroid tự mở ứng dụng khi Android sẵn sàng.'):'Chọn thư mục ở phía trên để bắt đầu.';
+ return '<article class="device-card '+(active?'running':'')+(view===String(i)?' chosen':'')+(!project?' empty':'')+'" data-device="'+i+'">'+
+  '<div class="device-head"><span class="device-title"><span class="state-dot '+escapeHTML(device.status||'off')+'"></span>Máy '+(i+1)+'</span>'+
   '<div class="device-heading-actions"><span class="status-label">'+(isWeb?'Web mobile · ':'Android ảo · ')+escapeHTML(statusText(device.status))+'</span>'+
-  (isWeb?'<span class="preview-note">Web ≠ Android native</span>':'')+
-  (project?'<button class="button focus-button" data-focus-slot="'+i+'" title="Phóng lớn màn hình này">⛶ Xem lớn</button>':'')+'</div></div>'+
+  (isWeb?'<span class="preview-note">Xem giao diện web</span>':'')+
+  (project?'<button class="button focus-button" data-focus-slot="'+i+'" title="Phóng lớn màn hình này">⛶ Phóng to</button>':'')+'</div></div>'+
   '<select class="project-select" data-project-slot="'+i+'" aria-label="Dự án của máy Android '+(i+1)+'">'+options+'</select>'+
-  '<div class="project-actions"><button class="button connect" data-code-slot="'+i+'" title="Chọn thư mục dự án cục bộ hoặc mở trong VS Code">↗ '+title+'</button>'+
+  '<div class="project-actions"><button class="button connect" data-code-slot="'+i+'" title="Chọn thư mục hoặc mở VS Code">'+title+'</button>'+
   '<button class="button remove" data-remove-slot="'+i+'"'+(!project?' disabled':'')+' aria-label="Gỡ dự án khỏi Baodroid" title="Gỡ dự án này khỏi Baodroid, không xóa mã nguồn">✕</button></div>'+
   (project?
     '<div class="android-setup-actions">'+
@@ -72,7 +72,7 @@ function cardHTML(i){
     '<div class="recover-actions"><button class="button recover-app" data-recover-slot="'+i+'"'+
     (device.status==='booting'||device.build==='building'||device.build==='deploying'?' disabled':'')+
     '>↻ Sửa kết nối & mở app</button>'+
-    '<span class="recover-description">Tự nhận AVD → build → cài → mở APK</span></div>':'')+
+    '</div>':'')+
   (project&&!isWeb?
     '<div class="native-progress" data-native-progress="'+i+'"'+(!nativeProgressText(device)?' hidden':'')+'>'+
     '<span>'+escapeHTML(nativeProgressText(device))+'</span>'+

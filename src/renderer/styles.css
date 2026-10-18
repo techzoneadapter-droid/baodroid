@@ -196,3 +196,96 @@ footer{margin-top:auto;color:#6483a1;text-align:center;font-size:11px;padding:5p
 .recover-app:hover:not(:disabled){background:#1c8b97}
 .recover-app:disabled{opacity:.58;cursor:progress}
 .recover-description{font-size:10px;color:#80bdd3;flex:1 1 170px;text-align:center;line-height:1.4}
+
+
+/* v0.9 – preview-first, compact workstation. Older rules stay as fallback. */
+:root{font-family:"Segoe UI Variable","Segoe UI",Tahoma,Arial,sans-serif}
+body{min-width:700px}
+.topbar{min-height:56px;padding:7px clamp(12px,2vw,28px)}
+.brand-icon{width:34px;height:34px;font-size:23px;border-radius:9px}
+.brand strong{font-size:16px;letter-spacing:.8px}
+.brand small{font-size:9px;letter-spacing:.8px;margin-top:2px}
+.header-right{gap:7px}
+.header-right .button{min-height:31px;padding:6px 10px;font-size:11px}
+.sdk-status{font-size:10px}
+.main{max-width:none;padding:12px clamp(10px,1.5vw,25px);gap:9px}
+.intro{min-height:40px;gap:10px}
+.intro h1{font-size:17px;line-height:1.3;margin:0;font-weight:700}
+.intro p:not(.eyebrow),.intro .eyebrow{display:none}
+.intro #btn-add-project{min-height:33px;font-size:11px;padding:6px 12px}
+.preview-area{background:transparent;border:0;box-shadow:none;padding:2px 0;min-width:0}
+.preview-toolbar{margin:0 0 9px;padding:0 2px}
+.preview-heading h2{font-size:14px}
+.view-group{padding:3px}
+.view{padding:7px 11px;font-size:11px}
+.device-grid{gap:11px;align-items:start}
+.device-card{padding:11px;gap:8px;background:#12273b;box-shadow:0 6px 24px #0002;min-height:0}
+.device-head{min-height:30px}
+.device-title{font-size:13px}
+.device-heading-actions{gap:4px}
+.status-label{font-size:10px;padding:4px 6px}
+.preview-note{display:none}
+.project-select{padding:9px 10px;font-size:12px;min-height:36px}
+.project-actions{gap:5px}
+.project-actions .connect{font-size:10px;min-height:30px;padding:5px 10px;flex:0 1 auto;background:#203d57;border-color:#31526c}
+.project-actions .remove{min-height:30px;min-width:30px;padding:5px 8px}
+.android-setup-actions{padding:0}
+.android-setup-actions .native-setup{min-height:34px;font-size:11px}
+.android-setup-actions .native-active{padding:7px 9px;font-size:11px}
+.android-setup-actions .quiet{min-height:32px;font-size:10px}
+.recover-actions{margin:0;gap:0}
+.recover-actions .recover-app{min-height:36px;font-size:11px;background:#175c6a}
+.native-progress{margin:0;min-height:0}
+.screen-wrap{padding:5px 0 10px;min-height:200px}
+.phone{width:min(100%,340px);border-radius:28px;padding:6px}
+.screen{border-radius:20px}
+.device-details{min-height:30px;padding-top:8px;gap:8px}
+.device-details .message{font-size:11px}
+.device-card.empty{border-style:dashed;border-color:#314b64;background:#0e2031;min-height:100px}
+.device-card.empty .screen-wrap,.device-card.empty .device-details,.device-card.empty .project-actions .remove{display:none}
+.device-card.empty .project-actions{margin-top:0}
+.device-card.empty .project-actions .connect{width:100%;flex:1}
+.device-card.empty .status-label{display:none}
+.device-grid:not(.focus):has(>.device-card.empty){grid-template-columns:repeat(2,minmax(0,1fr))}
+.device-grid:not(.focus)>.device-card.empty{grid-column:1/-1}
+.device-grid.focus{grid-template-columns:minmax(0,1fr)}
+.device-grid.focus .device-card{width:100%;max-width:1340px;margin:0 auto;padding:14px;display:grid;
+ grid-template-columns:minmax(220px,.7fr) minmax(340px,1.3fr);
+ grid-template-rows:auto repeat(5,auto) minmax(0,1fr) auto auto;column-gap:17px;row-gap:9px;min-height:0}
+.device-grid.focus .device-head{grid-column:1/-1;grid-row:1}
+.device-grid.focus .project-select{grid-column:1;grid-row:2}
+.device-grid.focus .project-actions{grid-column:1;grid-row:3}
+.device-grid.focus .android-setup-actions{grid-column:1;grid-row:4}
+.device-grid.focus .recover-actions{grid-column:1;grid-row:5}
+.device-grid.focus .native-progress{grid-column:1;grid-row:6}
+.device-grid.focus .screen-wrap{grid-column:2;grid-row:2/8;min-height:0;margin:0;padding:6px;align-self:start}
+.device-grid.focus .phone{width:min(100%,415px);max-width:100%}
+.device-grid.focus .device-details{grid-column:1/-1;grid-row:8}
+.device-grid.focus .ai-panel{grid-column:1/-1;grid-row:9}
+.ai-panel{margin-top:1px;padding:0 9px!important;border-color:#2d4e68;box-shadow:none}
+.ai-panel:not([open]){display:block;min-height:0}
+.ai-panel:not([open])>:not(summary){display:none!important}
+.ai-panel[open]{display:flex;flex-direction:column;padding-bottom:12px!important;gap:9px}
+.ai-summary{cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 6px;
+ color:#d6eeff;font-size:12px;font-weight:700}
+.ai-summary::-webkit-details-marker{display:none}
+.ai-summary::before{content:"▸";color:#5ac4ff;margin-right:7px}
+.ai-panel[open]>.ai-summary::before{content:"▾"}
+.ai-summary span{margin-left:auto;font-size:10px;font-weight:400;color:#84a7c3}
+.ai-top-button{min-height:27px!important;padding:4px 8px!important;background:#173b5b;border-color:#2a5375;font-size:10px!important}
+.ai-panel[open] .ai-history{min-height:160px;max-height:300px}
+.ai-panel[open] .ai-model-row{margin-bottom:0}
+.log-panel{font-size:11px;border-color:#263f55}
+.log-panel summary{padding:9px 12px}
+footer{display:none}
+@media (max-width:1200px){
+ .device-grid.focus .device-card{grid-template-columns:minmax(220px,.6fr) minmax(280px,1fr)}
+ .device-grid.focus .phone{width:min(100%,385px)}
+ .device-grid:not(.focus) .phone{width:min(100%,310px)}
+}
+@media (max-width:850px){
+ .device-grid.focus .device-card{display:flex;flex-direction:column}
+ .device-grid.focus .screen-wrap{align-self:center}
+ .device-grid.focus .phone{width:min(100%,365px)}
+ .header-right .sdk-status{display:none}
+}

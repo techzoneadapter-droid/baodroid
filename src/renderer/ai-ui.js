@@ -10,6 +10,7 @@
  const notes=['','',''];
  const diffs=['','',''];
  const deviceCodes=[null,null,null];
+ const expanded=[false,false,false];
  let checked=false;
  async function call(name,...args){
    try{
@@ -30,10 +31,13 @@
    return select?.value||'';
  }
  function makePanel(i){
-   const panel=document.createElement('section');
+   const panel=document.createElement('details');
    panel.className='ai-panel';
+   panel.open=expanded[i];
+   panel.addEventListener('toggle',()=>{expanded[i]=panel.open;});
    panel.dataset.aiPanel=String(i);
    panel.innerHTML=
+     '<summary class="ai-summary">✦ ChatGPT <span>Viết & sửa code riêng cho máy '+(i+1)+'</span></summary>'+
      '<div class="ai-head"><div><strong>✦ AI viết code</strong><small>Chỉ sửa dự án của máy '+(i+1)+'</small></div>'+
      '<button type="button" class="button ai-connect" data-ai-connect="'+i+'">Kết nối ChatGPT</button></div>'+
      '<div class="ai-login-actions"><button type="button" class="button quiet" data-ai-install="'+i+'">Cài Codex CLI</button>'+
@@ -76,13 +80,17 @@
    if(!grid)return;
    grid.querySelectorAll(':scope > .device-card').forEach(card=>{
      const i=Number(card.dataset.device);
-     if(!Number.isInteger(i)||i<0||i>2 || card.querySelector('[data-ai-panel]'))return;
+     if(!Number.isInteger(i)||i<0||i>2 || card.querySelector('[data-ai-panel]') || !currentProject(i))return;
      const head=card.querySelector('.device-head');
      if(head && !head.querySelector('[data-ai-top]')){
        const top=document.createElement('button');
        top.type='button';top.className='button ai-top-button';top.dataset.aiTop=String(i);
-       top.textContent='✦ Kết nối ChatGPT';
-       top.addEventListener('click',()=>void connect(i));
+       top.textContent='✦ Chat AI';
+       top.addEventListener('click',()=>{
+         expanded[i]=true;
+         const panel=card.querySelector('[data-ai-panel]');
+         if(panel){panel.open=true;panel.scrollIntoView({behavior:'smooth',block:'nearest'});}
+       });
        head.append(top);
      }
      card.append(makePanel(i));
@@ -113,7 +121,7 @@
      codeBox.innerHTML='<span>Nhập mã thiết bị trên trang xác thực:</span><strong>'+escapeHTML(codeInfo.code)+'</strong><button class="button quiet" type="button">Mở trang đăng nhập</button>';
    }
    const top=document.querySelector('[data-ai-top="'+i+'"]');
-   if(top){top.disabled=!ready;top.textContent=auth?'✦ ChatGPT ✓':'✦ Kết nối ChatGPT';}
+   if(top){top.disabled=!ready;top.textContent=auth?'✦ AI đã kết nối':'✦ Chat AI';}
    panel.querySelector('.ai-model').disabled=session.busy;
    const history=panel.querySelector('.ai-history');
    let messages=session.messages.map(msg=>

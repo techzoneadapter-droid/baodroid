@@ -80,3 +80,14 @@ Giới hạn: CI Windows kiểm tra chức năng và tạo setup; chưa chạy G
 - Thời gian chờ ADB tối đa 120 giây/mỗi lần, có tiến độ và log định kỳ. Lỗi emulator/PANIC/WHPX/crash được ghi lại; khi cả hai lựa chọn GPU đều không chạy thì dừng hẳn, không tạo vòng thử vô hạn.
 - Nếu thất bại, dùng nút **Sửa kết nối & mở app** để thử lại sau khi giải quyết nguyên nhân, hoặc gửi file `baodroid-runtime.log` trong thư mục dữ liệu Baodroid để tiếp tục xác định lỗi.
 - Việc khởi động Android ảo, build APK và chạy ReelTara thực tế trên máy người dùng vẫn phải được kiểm nghiệm; CI Windows chỉ kiểm tra logic, cú pháp và đóng gói, không có AVD phần cứng.
+
+
+## v0.9.0 — Giao diện tập trung vào preview và giảm crash Android
+
+**Giao diện:** rút gọn thanh tiêu đề và phần giới thiệu, ưu tiên một màn hình điện thoại lớn khi có dự án; có nút để quay lại xem 3 máy. Khung ChatGPT/Codex của từng máy chuyển thành mục **thu gọn**; nhấn Chat AI để mở chat, nhưng vẫn giữ lịch sử và phiên làm việc độc lập. Dự án chưa chọn không còn chiếm khung điện thoại cao như trước. Các nút dành cho lập trình viên và log vẫn có nhưng không che màn hình.
+
+**Khởi động AVD:** Trên Windows, log đã xác nhận WHPX hoạt động nhưng emulator vẫn có thể crash với mã `3221225477` (Windows `0xC0000005`). Để giảm khả năng xung đột driver Vulkan, Baodroid thử **GPU SwiftShader + `-feature -Vulkan` + cold boot không snapshot** ở chế độ không cửa sổ, thời gian chờ tối đa 90 giây. Nếu emulator thoát hoặc không boot, Baodroid thử **một lần cuối với GPU host, Vulkan tắt và cửa sổ emulator dự phòng**. Dù emulator có cửa sổ riêng, Baodroid vẫn dùng ADB để truyền ảnh Android vào preview khi máy ảo hoạt động.
+
+**Không làm lại từ đầu:** giữ nguyên SDK, AVD và mã nguồn dự án; không xóa dữ liệu AVD. Lỗi đã được ghi vào log và dừng sau hai lần thử. Nếu cả hai cấu hình GPU thất bại, đây có thể là lỗi driver hoặc phiên bản emulator trên Windows cần khắc phục ngoài Baodroid. Đây không phải cam kết đã giải quyết crash trên mọi máy; cần kiểm tra thực tế Windows và APK của ReelTara.
+
+Tham khảo tài liệu chính thức Android Emulator về các lựa chọn GPU và cờ tắt Vulkan: https://developer.android.com/studio/run/emulator-acceleration và https://developer.android.com/studio/run/emulator-troubleshooting.
