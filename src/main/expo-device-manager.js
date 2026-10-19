@@ -35,7 +35,7 @@ function pickRegisteredEmulator(devices,serial){
  */
 async function waitForAvdBoot({
  adb,desiredAvd,preferredSerial,exec,excludedSerials=[],isActive=()=>true,
- onProgress=()=>{},onSerial=()=>{},onDiagnostic=()=>{},
+ onProgress=()=>{},onSerial=()=>{},onDiagnostic=()=>{},startupFailure=()=>null,
  timeoutMs=180000,pollMs=1600,discoveryMs=110000,now=Date.now,delay=sleep
 }){
  const start=now();
@@ -81,6 +81,16 @@ async function waitForAvdBoot({
    if(elapsedMs-lastProgress>=12000){
      lastProgress=elapsedMs;
      onProgress({elapsedMs,phase,serial,seen,lastError});
+   }
+   // A crashed emulator may stay open showing Windows Crashpad consent. Its
+   // console process will not register with ADB. Detect this evidence early
+   // rather than making users wait for the full discovery timeout.
+   if(!seen && elapsedMs>=8000){
+     const crash=startupFailure();
+     if(crash?.kind==='crash'){
+       onDiagnostic({serial,phase:'emulator crashed',lastError:crash.message,elapsedMs,seen:false});
+       throw new Error('Android Emulator gặp lỗi khởi động (Crashpad). '+crash.message);
+     }
    }
    if(!seen&&elapsedMs>=discoveryMs){
      onDiagnostic({serial,phase,lastError,elapsedMs,seen});

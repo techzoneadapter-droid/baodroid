@@ -62,3 +62,27 @@ test('Expo-style manager fails with ADB-specific diagnostic instead of silently 
  assert.equal(diagnostic.seen,false);
  assert.equal(diagnostic.serial,'emulator-5554');
 });
+
+test('crashpad window is detected from process logs rather than waiting for 110 seconds',async()=>{
+ let now=0,diagnostic=null,cycles=0;
+ await assert.rejects(waitForAvdBoot({
+   adb:'adb',desiredAvd:'Baodroid_Preview_1',preferredSerial:'emulator-5554',
+   exec:async()=>({stdout:'List of devices attached\n'}),
+   startupFailure:()=>({kind:'crash',message:'Showing crashdialog to get consent'}),
+   onDiagnostic:d=>{diagnostic=d},
+   now:()=>now,delay:async()=>{now+=2000;cycles++},
+   discoveryMs:110000,timeoutMs:180000
+ }),/Crashpad/);
+ assert.ok(now<=10000);
+ assert.ok(cycles<=5);
+ assert.equal(diagnostic.phase,'emulator crashed');
+});
+test('a harmless opengl warning does not prematurely stop ADB discovery',async()=>{
+ let now=0;
+ await assert.rejects(waitForAvdBoot({
+  adb:'adb',desiredAvd:'AVD',preferredSerial:'emulator-5554',
+  exec:async()=>({stdout:'List of devices attached\n'}),
+  startupFailure:()=>({kind:'warning',message:'Software OpenGL warning'}),
+  now:()=>now,delay:async()=>{now+=2000},discoveryMs:12000,timeoutMs:30000
+ }),/không xuất hiện trong ADB sau 12 giây/);
+});

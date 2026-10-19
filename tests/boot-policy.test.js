@@ -10,24 +10,36 @@ function mockEngine(){
   settings:{autoBuild:true}};
  return new Engine({data,save(){}},()=>{});
 }
-test('Expo-style minimal visible AVD launch uses standard command and host GPU only on retry',()=>{
- assert.deepEqual(GPU_MODES,['default','host']);
+test('Windows console uses host GPU while remote desktop chooses a software renderer',()=>{
+ assert.deepEqual(GPU_MODES,['host','software']);
  assert.equal(BOOT_TIMEOUT_MS,180000);
- assert.equal(ADB_DISCOVERY_TIMEOUT_MS,110000);
- const args=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5554});
- assert.deepEqual(args.slice(0,3),['@Baodroid_Preview_1','-port','5554']);
- assert.equal(args.includes('-no-window'),false);
- assert.equal(args.includes('-gpu'),false);
- assert.equal(args.includes('-no-snapshot-load'),false);
- assert.equal(args.includes('-feature'),false);
- const fallback=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5556,attempt:1});
- assert.equal(fallback.includes('-no-window'),false);
- assert.equal(fallback.includes('-no-snapshot-load'),true);
- assert.deepEqual(fallback.slice(fallback.indexOf('-feature'),fallback.indexOf('-feature')+2),['-feature','-Vulkan']);
- assert.deepEqual(fallback.slice(fallback.indexOf('-gpu'),fallback.indexOf('-gpu')+2),['-gpu','host']);
- assert.equal(gpuForAttempt(8),'host');
- assert.equal(gpuForAttempt(0),'default');
+ assert.equal(ADB_DISCOVERY_TIMEOUT_MS,85000);
+ const regular=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5554,sessionName:'Console'});
+ assert.deepEqual(regular.slice(0,3),['@Baodroid_Preview_1','-port','5554']);
+ assert.ok(regular.includes('-no-snapshot-load'));
+ assert.equal(regular.includes('-no-window'),false);
+ assert.deepEqual(regular.slice(regular.indexOf('-gpu'),regular.indexOf('-gpu')+2),['-gpu','host']);
+ const fallback=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5556,attempt:1,sessionName:'Console'});
+ assert.ok(fallback.includes('-no-window'));
+ assert.deepEqual(fallback.slice(fallback.indexOf('-gpu'),fallback.indexOf('-gpu')+2),['-gpu','software']);
+ const rdp=emulatorLaunchArgs({avd:'Baodroid_Preview_1',port:5554,sessionName:'RDP-Tcp#5'});
+ assert.ok(rdp.includes('-no-window'));
+ assert.equal(gpuForAttempt(0,'RDP-Tcp#5'),'software');
+ assert.equal(gpuForAttempt(1,'RDP-Tcp#5'),'host');
+ assert.equal(gpuForAttempt(0,'Console'),'host');
  assert.throws(()=>emulatorLaunchArgs({avd:'bad',port:5555}),/không hợp lệ/);
+});
+test('opengl32sw warnings alone do not cause an automatic crash classification',()=>{
+ const {diagnoseEmulatorLog}=require('../src/main/boot-policy');
+ const warning=diagnoseEmulatorLog(['INFO | Critical: Failed to load opengl32sw (specified module not found)',
+    'INFO | Warning: Software OpenGL failed. Falling back to system OpenGL']);
+ assert.equal(warning.kind,'warning');
+ const crash=diagnoseEmulatorLog(['INFO | Critical: Failed to load opengl32sw',
+    'INFO | Showing crashdialog to get consent.']);
+ assert.equal(crash.kind,'crash');
+ assert.match(crash.message,/Crashpad/);
+ assert.match(crash.message,/opengl32sw/);
+ assert.equal(diagnoseEmulatorLog(['INFO | crashpad_annotations: sdk_phone']),null);
 });
 test('preflight describes missing hypervisor instead of waiting several minutes',()=>{
  assert.equal(accelerationMessage(0,'',''),null);

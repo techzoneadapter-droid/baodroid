@@ -178,3 +178,16 @@ Sau nhiều lần thử chế độ `-no-window` trên Windows khiến AVD khôn
 - Giữ nguyên UI Preview Hub, 3 slot Android, Expo/Web, VS Code, Codex/ChatGPT, cập nhật bản vá và cơ chế tạo AVD v0.9.7. Không đổi Android SDK hay đụng dữ liệu AVD.
 
 **Phạm vi xác nhận:** CI Windows chỉ chạy Gradle batch smoke test với JAR fixture và đóng gói. Không có mã nguồn ReelTara trên máy người dùng, nên không thể khẳng định toàn bộ APK build thành công trước khi chạy kiểm tra thực tế.
+
+
+## v0.9.9 — Khắc phục crashpad/OpenGL trong Android Emulator 37.x
+
+**Lỗi Windows thực tế:** `Critical: Failed to load opengl32sw`, `Software OpenGL failed. Falling back to system OpenGL`, `Showing crashdialog to get consent`, sau đó AVD `Baodroid_Preview_1` không xuất hiện trong `adb devices`. Log của emulator 37.x có thể chứa cảnh báo `opengl32sw` ngay cả khi DLL không được phát hành kèm SDK; **không tải DLL lạ từ Internet**. Trong trường hợp này, dấu hiệu Crashpad cùng với không có serial ADB mới là bằng chứng tiến trình emulator không chạy được.
+
+- Dựa vào hướng dẫn chính thức [Android GPU acceleration](https://developer.android.com/studio/run/emulator-acceleration) và bài điều tra Windows emulator từ [windows-android-opencode / environment-gaps](https://github.com/JosiahSiegel/windows-android-opencode/blob/main/docs/environment-gaps.md), Baodroid chọn hai chế độ có kiểm soát, không thêm một emulator không rõ nguồn gốc.
+- Trên Windows Console: lần 1 chạy emulator windowed với `-gpu host -no-snapshot-load -feature -Vulkan`, lần 2 thử `-gpu software -no-window`. Với Windows RDP (`SESSIONNAME` dạng `RDP-...`), dùng phần mềm headless trước và GPU host windowed làm dự phòng. Đều sử dụng Google emulator.exe hiện đã cài.
+- Tích hợp bộ phát hiện **crashpad consent dialog**; nếu quá trình crash trước khi đăng ký thiết bị ADB, ngừng lần thử đó sớm, không chờ đủ 110 giây. Cảnh báo `opengl32sw` **một mình nó** không kích hoạt tự dừng.
+- Giữ retry tối đa **1 lần**, không xóa SDK, AVD, mã nguồn, dữ liệu emulator hoặc cài đặt dự án; nếu cả hai đều thất bại thì thông báo crash cụ thể thay vì báo chung chung ADB not listed.
+- Giữ UI Preview Hub ba điện thoại, VS Code, ChatGPT/Codex, Web Preview và bộ cập nhật, cũng như cơ chế build Gradle Wrapper chuẩn v0.9.8.
+
+**Giới hạn:** CI Windows chỉ mô phỏng log và chạy kiểm thử mã. Không có GPU Nvidia, driver, AVD và môi trường đăng nhập Windows của máy người dùng. Nếu Crashpad vẫn xuất hiện ở cả hai chế độ, phải kiểm tra log crash của emulator và hệ điều hành/driver GPU trên máy đó; bản cập nhật không được coi là chứng nhận Android đã chạy thành công.

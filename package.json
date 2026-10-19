@@ -1,7 +1,7 @@
 {
   "name": "baodroid",
   "productName": "Baodroid",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "Local Windows mobile preview for Vite, Expo Web and Android Emulator with independent Codex coding",
   "author": "Baodroid Contributors",
   "license": "MIT",

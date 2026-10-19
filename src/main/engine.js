@@ -13,7 +13,7 @@ const {waitForAvdBoot}=require('./expo-device-manager');
 const {emulatorEnvironment,emulatorHealth,diagnostics}=require('./androidbox-runtime');
 const {findVSCode, openVSCodeFolder} = require('./vscode');
 const {watchTargets,shouldSyncChange} = require('./watch-rules');
-const {BOOT_TIMEOUT_MS,ADB_DISCOVERY_TIMEOUT_MS,gpuForAttempt,emulatorLaunchArgs,accelerationMessage,bootReport}=require('./boot-policy');
+const {BOOT_TIMEOUT_MS,ADB_DISCOVERY_TIMEOUT_MS,gpuForAttempt,emulatorLaunchArgs,diagnoseEmulatorLog,accelerationMessage,bootReport}=require('./boot-policy');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const isSlot = i => Number.isInteger(i) && i >= 0 && i <= 2;
 function chooseFreeAvd(names,slots,index) {
@@ -326,12 +326,13 @@ class Engine {
         void this.boot(slot,generation,project).catch(error=>{if(worker.generation===generation)this.fail(slot,error);});
         return {status:'booting',serial:runningSerial,attached:true};
       }
-      const gpu=gpuForAttempt(worker.gpuAttempt);
-      this.log('Khởi động theo trình quản lý Expo CLI: AVD '+assigned.avd+
-        ', chế độ '+(worker.gpuAttempt===0?'chuẩn Android Emulator':'GPU host dự phòng')+
-        ', cổng '+port+'. Không sử dụng -no-window.','info',slot);
+      const sessionName=process.env.SESSIONNAME||'';
+      const gpu=gpuForAttempt(worker.gpuAttempt,sessionName);
+      this.log('Khởi động AVD '+assigned.avd+' bằng GPU '+gpu+
+        (gpu==='software'?' (chạy nền, tránh cửa sổ Crashpad)':' (chế độ cửa sổ Windows)')+
+        ', cổng '+port+', lần thử '+(worker.gpuAttempt+1)+'/2.','info',slot);
       worker.emulator=launch(this.tools().emulator,
-        [...emulatorLaunchArgs({avd:assigned.avd,port,attempt:worker.gpuAttempt}),'-no-metrics','-verbose'],{
+        [...emulatorLaunchArgs({avd:assigned.avd,port,attempt:worker.gpuAttempt,sessionName}),'-no-metrics','-verbose'],{
         env:emulatorEnvironment(this.store.data.settings.sdkPath),
         onLine:line=>{
           worker.lastEmulatorLines.push(String(line).slice(-450));
@@ -361,6 +362,7 @@ class Engine {
     const result=await waitForAvdBoot({
       adb,desiredAvd:avd,preferredSerial:this.devices[slot].serial,
       exec,timeoutMs:BOOT_TIMEOUT_MS,discoveryMs:ADB_DISCOVERY_TIMEOUT_MS,
+      startupFailure:()=>diagnoseEmulatorLog(worker.lastEmulatorLines),
       excludedSerials:this.devices.filter((_,i)=>i!==slot)
         .filter(d=>['booting','running'].includes(d.status)).map(d=>d.serial),
       isActive:()=>!this.closed&&worker.generation===generation,
@@ -377,10 +379,12 @@ class Engine {
       },
       onDiagnostic:diagnostic=>{
         const lines=worker.lastEmulatorLines||[];
+        const diagnosis=diagnoseEmulatorLog(lines);
         const clues=lines.filter(x=>/ERROR|PANIC|failed|crash|exception|graphics|qemu|WHPX/i.test(x)
           && !/crashpad_annotations|module_list\[/.test(x)).slice(-5);
         this.log('Không khởi động được AVD '+avd+
-          ': '+diagnostic.phase+'. '+(clues.length?clues.join(' | ').slice(-650):
+          ': '+diagnostic.phase+'. '+(diagnosis?.kind==='crash'?diagnosis.message:
+          clues.length?clues.join(' | ').slice(-650):
           'Hãy kiểm tra log emulator và tình trạng phiên bản Android Emulator.'),'error',slot);
       }
     });
@@ -715,7 +719,7 @@ class Engine {
   fail(slot,error) {
     const worker=this.workers[slot];
     const message=String(error?.message||error||'Android Emulator lỗi');
-    const retryable=/chưa hoàn tất khởi động|ADB không phát hiện|không xuất hiện trong ADB|chưa boot xong|đã thoát|mất kết nối/i.test(message);
+    const retryable=/chưa hoàn tất khởi động|ADB không phát hiện|không xuất hiện trong ADB|chưa boot xong|đã thoát|mất kết nối|Crashpad|Emulator gặp lỗi khởi động/i.test(message);
     const shouldRetry=!this.closed && retryable && !worker.attached && worker.recoveryAttempts<1;
     this.log('Máy '+(slot+1)+': '+message,'error',slot);
     // Cancel any outstanding boot monitor and release the failed emulator process.
@@ -728,7 +732,7 @@ class Engine {
     }
     worker.recoveryAttempts++;
     worker.gpuAttempt=1;
-    this.log('Tự thử lần cuối bằng GPU host có cửa sổ dự phòng (cấu hình từng khởi động được trên Windows).','warn',slot);
+    this.log('Tự thử cuối cùng bằng GPU '+gpuForAttempt(1,process.env.SESSIONNAME||'')+'; không thay SDK, AVD hay dự án.','warn',slot);
     worker.recoveryTimer=setTimeout(()=>{
       worker.recoveryTimer=null;
       void this.autoStartSlot(slot);
